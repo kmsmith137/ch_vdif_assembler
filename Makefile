@@ -34,4 +34,4 @@ install: libch_vdif_assembler.so ch_vdif_assembler_c.so
 	cp -f run-vdif-assembler show-moose-acquisitions.py $(BINDIR)/
 
 clean:
-	rm -f *~ *.o *.so *.pyc ch_vdif_assembler_c.cpp rfi-histogram
+	rm -f *~ *.o *.so *.pyc ch_vdif_assembler_c.cpp run-vdif-assembler
