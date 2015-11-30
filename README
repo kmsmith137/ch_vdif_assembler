@@ -1,7 +1,8 @@
 ch_vdif_assembler: a multithreaded, real-time acqusition system for CHIME high-speed data.
 
-Right now it is too slow, and fixes to make it faster are in progress.  In the meantime,
-the throughput is reasonable enough that it should be a useful starting point.
+Right now it is too slow, and fixes to make it faster are in progress.  
+In the meantime, the throughput is reasonable enough that it should 
+be a useful starting point.
 
 
 INSTALLATION
@@ -15,23 +16,27 @@ INSTALLATION
     - libpng
     - libhdf5
 
-  - Create a file Makefile.local as described in comments in Makefile.local.example
-    You can probably start with 'cp Makefile.local.example Makefile.local', and then
-    edit a little from there
+  - Create a file Makefile.local as described in comments in 
+    Makefile.local.example.  You can probably start with 
+       cp Makefile.local.example Makefile.local'
+    and then edit a little from there
 
   - You should now be able to compile with
       make
       make install
 
-  - To try it out, run the executable ./run-vdif-instructions and follow the instructions!
+  - To try it out, run the executable 
+       ./run-vdif-assembler 
+    and follow the instructions!
 
 
 WRITING EXTENSIONS
 ------------------
 
-  To integrate C++ code with ch_vdif_assembler, you'll want to define a subclass of
-  the virtual base class vdif_processor.  For a lot more detail, see comments in
-  ch_vdif_assembler.hpp.
+  To integrate C++ code with ch_vdif_assembler, you'll want to 
+  define a subclass o the virtual base class vdif_processor.  For 
+  a lot more detail, see comments in ch_vdif_assembler.hpp.
 
-  There's also a python interface which will probably never be fast enough for realtime
-  processing, but may be useful for prototyping code using captured data on disk.
+  There's also a python interface which will probably never be fast 
+  enough for realtime processing, but may be useful for prototyping 
+  code using captured data on disk.
