@@ -21,12 +21,12 @@ ch_vdif_assembler_c.cpp: ch_vdif_assembler_c.pyx _ch_vdif_assembler_c.pxd ch_vdi
 	cython --cplus $<
 
 ch_vdif_assembler_c.so: ch_vdif_assembler_c.cpp libch_vdif_assembler.so
-	$(CPP) -shared -o $@ $< -L. -lch_vdif_assembler
+	$(CPP) -shared -o $@ $< -L. -lch_vdif_assembler -lhdf5 -lpng
 
 run-vdif-assembler: run-vdif-assembler.o libch_vdif_assembler.so
 	$(CPP) -o $@ $< -L. -lch_vdif_assembler -lhdf5 -lpng
 
-install: libch_vdif_assembler.so ch_vdif_assembler_c.so
+install: libch_vdif_assembler.so ch_vdif_assembler_c.so run-vdif-assembler
 	cp -f ch_vdif_assembler.hpp $(INCDIR)/ch_vdif_assembler.hpp
 	cp -f libch_vdif_assembler.so $(LIBDIR)/libch_vdif_assembler.so
 	cp -f ch_vdif_assembler_c.so $(PYDIR)/ch_vdif_assembler_c.so
