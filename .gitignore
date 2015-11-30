@@ -1,0 +1,9 @@
+*~
+*.o
+*.so
+*.pyc
+ch_vdif_assembler_c.cpp
+TODO
+Makefile.local
+test-timestream-unwrapper
+run-vdif-assembler

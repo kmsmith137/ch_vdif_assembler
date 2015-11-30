@@ -1,0 +1,18 @@
+# Directory where executables will be installed (run-vdif-assembler, show-moose-acqusitions.py)
+BINDIR=$(HOME)/bin
+
+# Directory where C++ libraries will be installed (e.g. libch_vdif_assembler.so)
+LIBDIR=$(HOME)/lib
+
+# Directory where C++ header files will be installed (e.g. ch_vdif_assembler.hpp)
+INCDIR=$(HOME)/include
+
+# Directory where Python modules will be installed
+PYDIR=$(HOME)/lib/python2.7/site-packages
+
+#
+# C++ command line
+# The -I/usr/include/python2.7 is needed for cython (you may need to substitute the path to your python installation)
+# Don't forget -lpthread!
+#
+CPP=g++ -Wall -Wno-pragmas -Wno-strict-aliasing -Wno-unused-local-typedefs -O3 -ffast-math -funroll-loops -fPIC -I$(HOME)/include -I$(HOME)/include/python2.7 -L$(HOME)/lib -lpthread
