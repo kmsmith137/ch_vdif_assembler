@@ -584,7 +584,7 @@ vdif_header vdif_file::read_header() const
     int header_location = current_row * (data_nbytes + vdif_assembler::header_nbytes);
 
     const uint32_t *p = reinterpret_cast<const uint32_t *> (&data[header_location]);
-    uint32_t pol = (p[3] & 0x0000fffff);
+    uint32_t pol = (p[3] & 0x0000ffff);
     uint32_t link_id = (p[3] & 0x000f0000) >> 16;
     uint32_t slot_id = (p[3] & 0x01f00000) >> 20;
     uint32_t fpga_count = p[5];
