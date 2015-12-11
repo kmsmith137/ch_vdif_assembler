@@ -166,11 +166,6 @@ void vdif_chunk::set_zero()
 
 void vdif_chunk::write(const string &filename)
 {
-    if (is_on_disk)
-	cout << "warning: writing vdif_chunk with is_on_disk=true?!\n" << flush;
-    if (!want_on_disk)
-	cout << "warning: writing vdif_chunk with want_on_disk=false?!\n" << flush;
-
     int fd = open(filename.c_str(), O_WRONLY | O_CREAT, 0666);
 
     if (fd < 0) {

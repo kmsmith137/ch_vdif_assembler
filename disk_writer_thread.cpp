@@ -38,6 +38,7 @@ struct disk_writer_thread : public thread_base {
 
 	    if (!mkdir_called) {
 		xmkdir(outdir);
+		cout << (name + string(": created directory ") + outdir + "\n") << flush;
 		mkdir_called = true;
 	    }
 	    
@@ -49,7 +50,7 @@ struct disk_writer_thread : public thread_base {
 	    string filename = outdir + basename;
 	    
 	    data->write(filename);
-	    cout << (name + string(": wrote ") + filename) << endl;
+	    cout << (name + string(": wrote ") + filename + "\n") << flush;
 	}
 	
 	k.let_live();

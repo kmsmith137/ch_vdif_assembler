@@ -147,9 +147,10 @@ struct vdif_chunk : noncopyable {
 
     // Warning: this constructor allocates the buffer but doesn't initialize it
     // In both constructors, it's important that the seq_ids go 0,1,2,etc.  (See stream_put_chunk below)
+    // This constructor sets is_on_disk=false
     vdif_chunk(int npackets, int seq_id);
 
-    // Read from file
+    // Read from file (this constructor sets is_on_disk=true)
     vdif_chunk(const std::string &filename, int seq_id);
 
     void set_zero();

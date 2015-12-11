@@ -112,9 +112,8 @@ assembler_nerve_center::assembler_nerve_center(bool write_to_disk, int rbuf_size
     killflag = false;
     killmsg = "[should never see this]";
     
-    // placeholder values, will be initialized in stream_start()
+    // placeholder value, will be initialized in stream_start()
     is_realtime = false;
-    is_writing_to_disk = false;
 
     ndrops_assembler = 0;
     ndrops_disk_writer = 0;
