@@ -1,11 +1,19 @@
-// Eventually this will be part of a systematic suite of unit tests
-
-#include "ch_vdif_assembler.hpp"
-
+#include <cassert>
+#include "ch_vdif_assembler_internals.hpp"
 
 using namespace std;
 using namespace ch_vdif_assembler;
 
+
+static void test_initialization(uint32_t fpga0)
+{
+    timestamp_unwrapper tsu;
+    int64_t t0 = tsu.unwrap(fpga0);
+
+    assert(t0 >= 0);
+    assert(t0 < (int64_t(1) << 32));
+    assert((uint32_t)t0 == fpga0);
+}
 
 int main(int argc, char **argv)
 {
@@ -13,6 +21,14 @@ int main(int argc, char **argv)
 
     // If this fails, then the test needs to be rethought....
     assert(RAND_MAX == 0x7fffffff);
+
+    test_initialization(0);
+    test_initialization(1);
+    test_initialization(1 << 10);
+    test_initialization(1 << 20);
+    test_initialization(1 << 31);
+    test_initialization((uint32_t)(-1));
+    test_initialization((uint32_t)(-2));
 
     for (int n = 0; n < 100; n++) {
 	timestamp_unwrapper tsu;

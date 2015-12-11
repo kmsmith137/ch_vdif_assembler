@@ -1,21 +1,11 @@
-#include <errno.h>
-#include <sys/stat.h>
+#include <cmath>
 #include <cstring>
-#include <string>
-#include <stdexcept>
-#include <boost/make_shared.hpp>
-#include <boost/noncopyable.hpp>
-
+#include <algorithm>
 #include <png.h>
+
 #include "ch_vdif_assembler.hpp"
 
 using namespace std;
-using namespace boost;
-
-#ifndef xassert
-#define xassert(cond) xassert2(cond, __LINE__)
-#define xassert2(cond,line) do { if (!(cond)) throw std::runtime_error("Assevdifon '" __STRING(cond) "' failed (" __FILE__ ":" __STRING(line) ")"); } while (0)
-#endif
 
 namespace ch_vdif_assembler {
 #if 0
@@ -29,7 +19,7 @@ namespace ch_vdif_assembler {
 // has anything to do with vdif data)
 
 
-struct png_writer : boost::noncopyable {
+struct png_writer : noncopyable {
     png_structp png_ptr;
     png_infop info_ptr;
     FILE *fp;
@@ -58,19 +48,24 @@ png_writer::~png_writer()
 
 void png_writer::deallocate()
 {
+    // close file first
     if (fp) {
 	fclose(fp);
 	fp = NULL;
     }
     
-    if (info_ptr) {
-	png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
-	info_ptr = NULL;
-    }
-    
-    if (png_ptr) {
-	png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
+    //
+    // The libpng documentation doesn't really explain how to clean up its state.
+    //
+    // I dug into the source code and decided that one call to png_destroy_write_struct()
+    // destroys both the png_ptr and the info_ptr, and does the right thing if only the
+    // png_ptr is non-NULL.
+    //
+
+    if (png_ptr || info_ptr) {
+	png_destroy_write_struct(&png_ptr, &info_ptr);
 	png_ptr = NULL;
+	info_ptr = NULL;
     }
 }
 
@@ -112,7 +107,7 @@ void png_writer::write(const string &filename, png_byte *rgb, int nx, int ny)
     png_write_end(png_ptr, NULL);
 
     this->deallocate();
-    cerr << "wrote " << filename << "\n";
+    cout << "wrote " << filename << endl;
 }
 
 
@@ -137,20 +132,8 @@ struct waterfall_image {
     // Construct image by downgrading existing image (e.g. to make html thumbnail)
     waterfall_image(const waterfall_image &w, int new_nfreq, int new_nt_bins);
     
-    //
     // This is the main computational routine.
-    //
-    // It takes a chunk of data from the vdif_assembler, and absorbs it into the
-    // waterfall plot.  
-    //
-    // Arugments t0,nt have the same meanings as in vdif_processor::process_data().
-    //
-    // The 'vis' and 'mask' arrays are packed as in vdif_assembler::get_visibilities()
-    // and vdif_assembler::get_mask(), i.e. vis is an array of shape (nfreq, 4, nt)
-    // where the middle index is {xauto,yauto,recross,imcross}, and mask is an array
-    // of shape (nfreq, 2, nt) where the middle index is polarization.
-    //
-    void absorb_data(int64_t t0, int nt, const float *vis, const uint8_t *mask);
+    void absorb_chunk(const assembled_chunk &chunk);
 
     void clear();
     void subtract_medians();
@@ -210,47 +193,39 @@ waterfall_image::waterfall_image(const waterfall_image &w, int new_nfreq, int ne
 // Since this routine is the rate-limiting step of the waterfall_assembler,
 // it's written with a lot of optimization
 //
-void waterfall_image::absorb_data(int64_t t0_, int nt, const float *vis, const uint8_t *mask)
+void waterfall_image::absorb_chunk(const assembled_chunk &a)
 {
-    // This routine assumes we're running at native CHIME frequency resolution
-    xassert(nfreq == vdif_assembler::nfreq);
+    // Number of timestamps per waterfall bin
+    int tt = constants::timestamps_per_frame / this->nt_bins;
 
-    // This routine assumes that the number of time bins evenly divides the CHIME frame count
-    xassert((1 << 23) % nt_bins == 0);
+    // These assumptions simplify the code, but could be removed if necessary
+    xassert(this->nfreq == constants::chime_nfreq);
+    xassert(constants::timestamps_per_frame % this->nt_bins == 0);
+    xassert(a.t0 % tt == 0);
+    xassert(a.nt % tt == 0);
+    xassert(tt % 16 == 0);
 
-    // Number of timestamps per bin
-    int tt = (1<<23) / nt_bins;
-
-    // Shift t0 to beginning of frame
-    int t0 = (t0_ % (1 << 23));
-
-    // Bin range
-    int b0 = t0/tt;
-    int b1 = ((t0+nt-1) / tt) + 1;
-
-    // This should be guaranteed but never hurts to check
-    xassert(b1 <= nt_bins);
+    int b0 = (a.t0 / tt) % nt_bins;    // first waterfall bin in assembled chunk
+    int nb = (a.nt / tt);              // number of waterfall bins in assembled chunk
 
     for (int f = 0; f < nfreq; f++) {
 	for (int pol = 0; pol < 2; pol++) {
-	    const float *vis_row = &vis[(4*f+pol)*nt];
-	    const uint8_t *mask_row = &mask[(2*f+pol)*nt];
-
-	    for (int b = b0; b < b1; b++) {
-		// range of time indices falling in bin b
-		int j0 = max(b*tt-t0, 0);
-		int j1 = min((b+1)*tt-t0, nt);
+	    for (int b = 0; b < nb; b++) {
+		// Points to the data which will be accumulated into waterfall bin (f,p,b0+b)
+		const uint8_t *buf = &a.buf[(2*f+pol) * a.nt + b*tt];
 		
-		float num = 0.0;
+		int num = 0;
 		int den = 0;
-		
-		for (int j = j0; j < j1; j++) {
-		    num += vis_row[j];
-		    den += mask_row[j];
-		}
+		int sum, count;
 
-		acc_num[f*2*nt_bins + pol*nt_bins + b] += num;
-		acc_den[f*2*nt_bins + pol*nt_bins + b] += den;
+		for (int j = 0; j < tt; j += 16) {
+		    assembled_chunk::sum16_auto_correlations(sum, count, buf+j);
+		    num += sum;
+		    den += count;
+		}		    
+
+		acc_num[f*2*nt_bins + pol*nt_bins + b+b0] += (float)num;
+		acc_den[f*2*nt_bins + pol*nt_bins + b+b0] += (float)den;
 	    }
 	}
     }
@@ -259,7 +234,7 @@ void waterfall_image::absorb_data(int64_t t0_, int nt, const float *vis, const u
 
 void waterfall_image::subtract_medians()
 {
-    std::vector<double> buf(nt_bins);
+    vector<double> buf(nt_bins);
     int nvals;
 
     // loop over (freq,pol pairs)
@@ -401,27 +376,28 @@ struct waterfall_plotter : public vdif_processor
 
     waterfall_image curr_img;
 
-    waterfall_plotter(const std::string &outdir);
-
-    // Devirtualize vdif_processor
-    virtual void process_data(vdif_assembler &assembler, int64_t t0, int nt);
-    virtual void finalize();
+    waterfall_plotter(const std::string &outdir, bool is_critical);
     virtual ~waterfall_plotter() { }
 
+    // Devirtualize vdif_processor
+    virtual void process_chunk(const shared_ptr<assembled_chunk> &chunk);
+    virtual void initialize();
+    virtual void finalize();
+
     void write_images();
-    static void make_dir(const std::string &dirname);
 };
 
 
-waterfall_plotter::waterfall_plotter(const string &outdir_)
-    : outdir(outdir_),       
+waterfall_plotter::waterfall_plotter(const string &outdir_, bool is_critical)
+    : vdif_processor("waterfall plotter", is_critical), 
+      outdir(outdir_),       
       imgdir(outdir_ + string("/img")),
       curr_frame(0),
       curr_frame_initialized(false),
-      curr_img(vdif_assembler::nfreq, 1024)
+      curr_img(constants::chime_nfreq, 1024)
 {
-    make_dir(outdir);
-    make_dir(imgdir);
+    xmkdir(outdir);
+    xmkdir(imgdir);
 }
 
 
@@ -431,18 +407,14 @@ waterfall_plotter::waterfall_plotter(const string &outdir_)
 // It calls assembler.get_mask() and assembler.get_visibilities() to get
 // the current chunk of data, and absorbs it into the waterfall plot.
 //
-void waterfall_plotter::process_data(vdif_assembler &assembler, int64_t t0, int nt)
+void waterfall_plotter::process_chunk(const shared_ptr<assembled_chunk> &chunk)
 {
-    if (assembler.span_frames) {
-	cerr << "waterfall plotter only works if assembler.span_frames is set to false\n";
-	throw runtime_error("waterfall plotter only works if assembler.span_frames is set to false");
-    }
-
-    int64_t frame = t0 / (1<<23);
+    int64_t frame = chunk->t0 / constants::timestamps_per_frame;
 
     if (!curr_frame_initialized) {
 	curr_frame = frame;
 	curr_frame_initialized = true;
+	curr_img.clear();
     }
     else if (curr_frame != frame) {
 	// Frame complete, write and move on to the next
@@ -451,19 +423,20 @@ void waterfall_plotter::process_data(vdif_assembler &assembler, int64_t t0, int 
 	curr_img.clear();
     }
 
-    vector<uint8_t> mask(vdif_assembler::nfreq * 2 * nt, 0);
-    assembler.get_mask(&mask[0], t0, nt);
-
-    vector<float> vis(vdif_assembler::nfreq * 4 * nt, 0);
-    assembler.get_visibilities(&vis[0], t0, nt);
-
-    curr_img.absorb_data(t0, nt, &vis[0], &mask[0]);
+    curr_img.absorb_chunk(*chunk);
 }
 
+
+void waterfall_plotter::initialize()
+{
+    curr_frame_initialized = false;
+    curr_img.clear();
+}
 
 void waterfall_plotter::finalize()
 {
     this->write_images();
+    curr_img.clear();
 }
 
 
@@ -485,56 +458,10 @@ void waterfall_plotter::write_images()
     }
 }
 
-
-void waterfall_plotter::make_dir(const string &dirname)
+shared_ptr<vdif_processor> make_waterfall_plotter(const string &outdir, bool is_critical)
 {
-    int err = mkdir(dirname.c_str(), 0777);
-
-    if (!err)
-	return;
-
-    if (errno != EEXIST) {
-	stringstream ss;
-	ss << "couldn't create directory " << dirname << ": " << strerror(errno);
-	
-	string err_msg = ss.str();
-	cerr << err_msg << "\n";
-	throw runtime_error(err_msg);
-    }
-    
-    struct stat s;
-    err = stat(dirname.c_str(), &s);
-    
-    if (err < 0) {
-	stringstream ss;
-	ss << "couldn't stat file " << dirname << ": " << strerror(errno);
-	
-	string err_msg = ss.str();
-	cerr << err_msg << "\n";
-	throw runtime_error(err_msg);
-    }
-
-    if (!S_ISDIR(s.st_mode)) {
-	stringstream ss;
-	ss << "couldn't create directory " << dirname << ": file already exists and is not a directory";
-	
-	string err_msg = ss.str();
-	cerr << err_msg << "\n";
-	throw runtime_error(err_msg);
-    }
+    return make_shared<waterfall_plotter> (outdir, is_critical);
 }
 
 
-shared_ptr<vdif_processor> make_waterfall_plotter(const string &outdir)
-{
-    return boost::make_shared<waterfall_plotter> (outdir);
-}
-
-
-}  // namespace ch_vdif_assembler
-
-/*
- * Local variables:
- *  c-basic-offset: 4
- * End:
- */
+}   // namespace ch_vdif_assembler

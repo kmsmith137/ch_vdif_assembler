@@ -1,0 +1,33 @@
+- Some nuisance issues related to thread termination:
+   - if a C++ exception is thrown, it takes a long time for the core dump to get written
+     (I suspect this would be fixed by properly joining threads after they exit)
+   - if a C++ exception is thrown it crashes the python interpreter, since cython is
+     not trapping the exception and converting it to a python exception (not sure why,
+     this works in toy examples)
+   - if C++ processors are being run through the python interface, then control-C
+     doesn't abort the processing, since it's being "swallowed" by the python interpreter
+     (an easy fix would be to add a 1-sec timeout to assembler.wait_for_end() and
+     loop it)
+
+- Reinstate a few loose ends from v1 (most importantly the RFI mask)
+
+- Performance testing on moose in a "fully loaded" case with network capture and writing
+  to disk, at the same time as a nontrivial C++ processor such as an FRB search.
+
+- Quantify packet loss.  Is there any benefit to using high-tech libraries like pfring or dkpk?
+  Related: pin threads to cores?  Use hugepages?
+
+- Why is the assembler so much slower on my desktop than on moose?  Is the L3 cache
+  becoming a bottleneck?
+
+- Systematic unit testing, including concurrency corner cases
+
+- We may eventually want a little more asynchronous functionality, so that the
+  assembler can run as a "remote-controlled" daemon
+
+- Cleanup:
+    - Properly destroy mutexes/conditionals, and joining threads
+    - Use a public/private split in classes (currently I'm not bothering in most cases)
+    - Makefile should warn if . and $(LIBDIR) aren't in LD_LIBRARY_PATH (in this order)
+    - likewise if $(PYDIR) isn't in PYTHONPATH
+    - Numerous small FIXME's throughout the code

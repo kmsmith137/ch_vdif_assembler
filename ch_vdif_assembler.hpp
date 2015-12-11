@@ -20,8 +20,6 @@
 //      software may change soon, but for now there are some flags in the
 //      assembler which may help.
 //
-//   5. RFI mask.  The assembler has flags to apply this automatically.
-//
 // To use this libarary, you:
 //
 //   - Construct an object of type vdif_assembler, which implements some
@@ -29,494 +27,419 @@
 // 
 //   - Define a subclass of the virtual base class vdif_processor which
 //     contains task-specific data processing logic, and register the
-//     processor with the assembler (vdif_assembler::register_processor())
+//     processor with the assembler (assembler.register_processor()).
 //
 //   - Create an object of type vdif_stream, which represents the high-speed
-//     data stream to be processed.  Right now the only subclasses of vdif_stream
-//     are vdif_file (representing a single file) or vdif_acquisition
-//     (representing multiple files).
+//     data stream to be processed.  Currently the following subclasses are
+//     implemented:
+//
+//         vdif_network_stream:    real-time network capture
+//         vdif_file_stream:       previous network capture saved on disk
+//         vdif_simulated_stream:  for testing (currently doesn't simulate much)
 //
 //     To get a list of filenames in an acqusition on moose, you may find
 //     the utility show-moose-acquisitions.py useful.
-//    
+//
+//   - Call assembler.run()
+//
+//
+// Multiple processors can be registered, and will be run in separate threads.
+// For example we could try to run a waterfall_plotter, an FRB search, and a GPU
+// pulsar backend at the same time.  The data can also be saved to disk in real
+// time in vdif format, or buffered and saved to disk if a processor calls
+// vdif_assembler::trigger().
+//
+// Currently, each assembler instance may only process one stream, and you'll
+// get an error if you try to call run() or register_processor() after the assembler
+// has finished.  I may generalize this later.
+
 
 #ifndef _CH_VDIF_ASSEMBLER_HPP
 #define _CH_VDIF_ASSEMBLER_HPP
 
-#include <stdint.h>
+#if (__cplusplus < 201103) && !defined(__GXX_EXPERIMENTAL_CXX0X__)
+#error "This source file needs to be compiled with C++0x support (g++ -std=c++0x)"
+#endif
+
+#include <unistd.h>
+#include <string>
 #include <vector>
+#include <memory>
 #include <complex>
 #include <iostream>
-#include <boost/shared_ptr.hpp>
-#include <boost/shared_array.hpp>
+#include <stdexcept>
+
+#include "ch_vdif_assembler_kernels.hpp"
+
+
+// Branch predictor hint
+#ifndef _unlikely
+#define _unlikely(cond)  (__builtin_expect(cond,0))
+#endif
+
+//
+// xassert(): like assert, but throws an exception in order to work smoothly with python.
+// We also print the exception to stdout, so that we see it regardless of which thread threw it.
+//
+#ifndef xassert
+#define xassert(cond) xassert2(cond, __LINE__)
+#define xassert2(cond,line) \
+    do { \
+        if (_unlikely(!(cond))) { \
+	    const char *msg = "Assertion '" __STRING(cond) "' failed (" __FILE__ ":" __STRING(line) ")\n"; \
+	    std::cout << msg << std::flush; \
+	    throw std::runtime_error(msg); \
+	} \
+    } while (0)
+#endif
+
 
 namespace ch_vdif_assembler {
 #if 0
 }; // pacify emacs c-mode
 #endif
 
-// forward declarations...
-struct vdif_header;
-struct vdif_stream;
-struct vdif_processor;
 
-
+// -------------------------------------------------------------------------------------------------
 //
-// @mask should be an array of length vdif_assembler::nfreq (=1024)
-// @version=0 gets the most recent mask version
-//
-// This function fills the mask array with 0's (representing bad channels)
-// or 1's (good channels).
-// 
-extern void get_rfi_mask(int *mask, int version);
+// Constants
 
 
-//
-// The 32-bit FPGA counts used as timestamps "wrap around" every 3 hours.
-//
-// This helper class converts a stream of unsigned 32-bit FPGA counts to
-// a stream of signed 64-bit timestamps without wraparound.  It correctly
-// handles out-of-order timestamps as long as the "jitter" isn't more than
-// 2^31 timestamps (which is an unrealistic case).
-//
-// WARNING: timestamps are always represented by 'int64_t', and it is a bug to
-// convert them to 'int'.  Be careful since it's easy to do this by accident!
-//
-class timestamp_unwrapper {
-private:
-    bool     initialized;
-    int64_t  last_timestamp;
-
-public:
-    timestamp_unwrapper() : initialized(false), last_timestamp(0) { }
-
-    inline int64_t unwrap(uint32_t x)
-    {
-	if (!initialized) {
-	    initialized = true;
-	    last_timestamp = (int64_t)((uint64_t)x);   // sets upper 32 bits to zero
-	    return last_timestamp;
-	}
-
-	int32_t delta = (int32_t)x - (int32_t)last_timestamp;
-	last_timestamp += (int64_t)delta;
-	return last_timestamp;
-    }
+namespace constants {
+    static const int chime_nfreq = 1024;
+    static const int header_nbytes = 32;
+    static const int timestamps_per_packet = 625;
+    static const int timestamps_per_frame = 1 << 23;    // cadence of noise source
+    static const int packet_nbytes = 5032;              // = header_nbytes + 8 * timestamps_per_packet
+    static const int num_disks = 10;
 };
 
 
 // -------------------------------------------------------------------------------------------------
 //
-// The main vdif_assembler class.  
+// Helper routines
 //
-// To process real-time data, construct an vdif_assembler, register some processors,
-// construct an vdif_stream, and call vdif_assembler::run()!
+// One thing that would be generally useful is a thread-safe stream class for logging.
+// Right now the output from different threads can be interleaved, which can be confusing.
+// In the meantime, it helps is to write each line as a single string, i.e. instead of
+//   cout << "The value of i is: " << i << endl;
 //
-// The current implementation of vdif_assembler could be improved (too much copying) 
-// but I don't think I'll need to change the core interface!
+// do either
+//   cout << (string("The value of i is: ") << to_string(i) << "\n") << flush;
 //
+// or
+//   stringstream ss;
+//   ss << "The value of i is: " << i << "\n";
+//   cout << ss.str() << flush;
 
-class vdif_assembler {
-public:
-    //
-    // CHIME frequencies are represented as pairs (ifreq_major, ifreq_minor) 
-    // where (0 <= ifreq_major < nfreq major) and (0 <= ifreq_minor < nfreq_minor).
-    // The channel index is ifreq = ifreq_major * nfreq_major + ifreq_minor.
-    // Channel index 0 is 800 MHz, and channel index (nfreq-1) is 400 MHz.
-    //
-    // Each row of the vdif_file contains row_nt time samples, for all 8 minor 
-    // frequencies at a fixed major frequency and polarization.  Each time sample 
-    // is a (4+4) bit complex number, represented as an offset-encoded 8-bit unsigned
-    // integer.  The row header contains {ifreq_major, polarization, initial_time}
-    // for the frame (see definition of struct vdif_header below)
-    //
-    static const int row_nt = 625;
-    static const int header_nbytes = 32;
-    static const int nfreq_major = 128;
-    static const int nfreq_minor = 8;
-    static const int nfreq = nfreq_major * nfreq_minor;
 
-protected:
-    int      buf_nt;       // defines window size in units of fpga counts
-    int64_t  buf_t0;       // current buffer position
-    bool     initialized;
-    bool     empty;
-    int      rfi_mask_version;
-    double   trim_frac;
-    int64_t  trim_cutoff;  // derived from trim_frac
+struct noncopyable
+{
+    noncopyable() { }
+    noncopyable(const noncopyable &) = delete;
+    noncopyable& operator=(const noncopyable &) = delete;
+};
 
-    timestamp_unwrapper tsu;
 
-    std::vector<int> rfi_mask;
+struct vdif_stream;
+struct vdif_processor;
+struct assembled_chunk;
+struct assembler_killer;
+struct assembler_nerve_center;
 
-    // Sliding buffer
-    std::vector<uint8_t>  vdif_flag;      // shape (nfreq, 2, 2*buf_nt)
-    std::vector<uint8_t>  vdif_data;      // shape (nfreq, 2, 2*buf_nt)
+// Creates directory, but doesn't throw an exception if it already exists
+extern void xmkdir(const std::string &dirname);
 
-    std::vector< boost::shared_ptr<vdif_processor> >  registered_processors;
+template<typename T>
+inline std::string to_string(const T &x)
+{
+    std::stringstream ss;
+    ss << x;
+    return ss.str();
+}
 
-public:
-    // I made some of these boolean flags public
-    bool     mask_zeros;
-    bool     mask_rails;
-    bool     mask_rfi;
-    bool     span_frames;
-    bool     allow_drops;
+
+// -------------------------------------------------------------------------------------------------
+//
+// The assembler class
+//
+// FIXME some optional argments supported in v1 are not supported yet in v2 (e.g. trim_frac).
+// I'll reinstate them soon.
+
+
+struct vdif_assembler
+{
+    std::shared_ptr<assembler_nerve_center> nc;
+    std::shared_ptr<assembler_killer> killer;
 
     //
-    // Arguments to the vdif_assembler constructor are as follows.
+    // Note: when the constructor is called, "assembler" and "disk_writer" threads
+    // are automatically spawned.  The 'write_to_disk' argument determines whether
+    // data is written to disk at the same time it's processed.  
+    // 
+    // If write_to_disk is set to false, but a large value of rbuf_size is chosen,
+    // the assembler will ring-buffer the data, and write to disk if a processor
+    // calls trigger().
     //
-    //   @mask_zeros: Currently a (0+0j) electric field value is sometimes a "real"
-    //      zero, but sometimes represents a dropped packet!  There is a long-term
-    //      fix for this planned, but in the meantime the caller has the option to
-    //      either treat (0+0j) as zero, or mask it.  It's my understanding that
-    //      this type of packet drop is rare, so mask_zeros=false is the default.
+    vdif_assembler(bool write_to_disk=false, int rbuf_size=constants::num_disks, int abuf_size=4, int assembler_nt=65536);
+    
+    // Each call to register_processor() spawns one processing thread.
+    void register_processor(const std::shared_ptr<vdif_processor> &p);
+    
     //
-    //   @mask_rails: If set, then electric field measurements where either the
-    //      real or imaginary part is "railed" will be masked.
+    // Spawns one or more I/O threads, and waits for assembler to finish.
+    // One quirk of the current code is: run() will still process the data
+    // even if no processing threads are registered and write_to_disk=false!
     //
-    //   @mask_rfi: If set, then one of the hardcoded RFI masks will be applied
-    //      (see ch_rfi_assembler::get_rfi_mask())
-    //
-    //   @rfi_mask_version: Determines version of the RFI mask; only meaningful if
-    //      mask_rfi=true.  Setting rfi_mask_version=0 uses the most current mask.
-    //
-    //   @trim_frac: Currently there is a big level change in the data every 21.47
-    //      seconds when the noise source switches on/off.  We mask a small fraction
-    //      of the data near the level changes to remove transient effects.
-    //
-    //   @span_frames: By default (span_frames=false), calls to vdif_processor::process_data()
-    //      are split up so that they never span a noise source switch event.  This simplifies
-    //      detrending for example.  Set this flag to true if you don't want this behavior.
-    //
-    //      To determine which noise source frame a given timestamp belongs to, do:
-    //          int64_t frame = (fpga_count % (1 << 23));
-    //
-    //   @buf_nt: Choosing a larger value here may have the benefit of reducing
-    //      the number of dropped packets, at the expense of memory footprint,
-    //      cache efficiency, and latency.  The default value (64K) means that
-    //      the memory footprint of the assembler will be ~2GB, the latency will
-    //      be ~0.1 sec, and packet drops almost never happen.
-    //    
-    //   @allow_drops: Set to false if you want to fail with an error if the assembler
-    //      needs to drop packets.  (I don't recommend ever setting this.)
-    //
-    vdif_assembler(bool mask_zeros=false, bool mask_rails=true, bool mask_rfi=false,
-		  int rfi_mask_version=0, double trim_frac=1.0e-5, bool span_frames=false,
-		  int buf_nt=65536, bool allow_drops=true);
+    void run(const std::shared_ptr<vdif_stream> &s);
 
-    void register_processor(const boost::shared_ptr<vdif_processor> &p);
-    void run(vdif_stream &vs);
+    // The asynchronous version of run()
+    void start_async(const std::shared_ptr<vdif_stream> &s);
+    void wait_until_end();
+};
+
+
+// -------------------------------------------------------------------------------------------------
+//
+// vdif_stream: a virtual base class which represents a stream of unassembled data.
+// Currently four subclasses are defined:
+//
+//    - network_stream: a real-time capture arriving over the network
+//    - file_stream: a previous capture which has been saved to disk
+//    - sim_stream: a simulated 6.4 Gpbs capture (right now not much is simulated, but this will change)
+//    - timing_stream: a simulated capture which times the assembler and registered processors
+
+
+struct vdif_stream {
+    bool is_realtime;
+    
+    vdif_stream(bool is_realtime_) : is_realtime(is_realtime_) { }
+    virtual ~vdif_stream() { }
+    
+    virtual void spawn_threads(const std::shared_ptr<assembler_nerve_center> &nc) = 0;
+};
+
+
+//
+// The streams are implemented as factory functions returning pointers, in order
+// to avoid polluting the .hpp files with details of their implementations.
+//
+extern std::shared_ptr<vdif_stream> make_file_stream(const std::string &filelist_filename);
+
+extern std::shared_ptr<vdif_stream> make_file_stream(const std::vector<std::string> &filename_list);
+
+extern std::shared_ptr<vdif_stream> make_network_stream();
+
+extern std::shared_ptr<vdif_stream> make_simulated_stream(double gbps=6.4, double nsec=60.0);
+
+extern std::shared_ptr<vdif_stream> make_timing_stream(int npackets_per_chunk, int nchunks);
+
+
+// -------------------------------------------------------------------------------------------------
+//
+// vdif_processor: represents a processing task which runs on assembled chunks.  For a reference
+// example, see waterfall_plotter.cpp.
+//
+// Each processor is run in its own thread, which is spawned when vdif_assembler::register_processor()
+// is called.  Each processing thread ends when end-of-stream is reached, an unrecoverable error
+// occurs, or if the processor throws an exception.
+
+
+struct vdif_processor : noncopyable {
+    std::string name;
+    bool is_critical;
+
+    pthread_mutex_t mutex;
+    bool runflag;
 
     //
-    // The processing logic works as follows.  Whenever a chunk of data is
-    // ready, the vdif_assembler calls
+    // If a processor is 'critical', then an exception thrown in the processor will kill the entire
+    // assembler.  Otherwise, when the processor dies, the assembler (and any other registered processors)
+    // keeps running until end-of-stream.
     //
-    //   vdif_processor::process_data()
-    //
-    // To get the data, the vdif_processor calls one or more of the following 
-    // routines back in the vdif_assembler.  Note that all arrays are 1D-packed.
-    //
-    //   vdif_assembler::get_mask()
-    //      fills shape-(nfreq,2,nt) array
-    //      the middle index is the polarization, either 0 or 1
-    //      each element is guaranteed to be 0 (=bad) or 1 (=good)
-    //
-    //   vdif_assembler::get_raw_data()
-    //      fills shape-(nfreq,2,nt) array, middle index is polarization
-    //      each element is an 8-bit offset-encoded electric field value
-    //      elements where mask=0 are guaranteed to equal 0x88 (which is 0+0j offset-encoded)
-    //
-    //   vdif_assembler::get_complex_data()
-    //      fills shape-(nfreq,2,nt) array, middle index is polarization
-    //      each element is a complex electric field value, without any encoding
-    //      elements where mask=0 are guaranteed to equal 0+0j
-    //
-    //   vdif_assembler::get_visibilities()
-    //      fills shape-(nfreq,4,nt) array
-    //      packing order for the middle index is
-    //         (X^*X)  (Y^*Y)  (Re X^*Y)  (Im X^*Y)
-    //      masked elements are guaranteed to equal 0
-    //
-    // When vdif_processor::process_data() is called, the vdif_assembler gives the vdif_processor 
-    // a range [t0,t0+nt) of timestamps which are ready.
-    //
-    // IMPORTANT: Usually these ranges will be contiguous between calls, e.g.
-    //   [t0,t0+nt)   [t0+nt,t0+2*nt)   [t0+2*nt,t0+3*nt)   ...
-    // but the vdif_processor should not assume that this!  If there is a temporary 
-    // interruption in data stream, then a timestamp gap will appear.
-    //
-    // Each of the vdif_assembler::get_*() callbacks takes a timestamp range [t0,t0+nt).
-    // This will usually be the full range of timestamps passed to vdif_processor::process_data(),
-    // but the vdif processor is free to specify a subrange or read in multiple chunks.
-    //
-    void get_mask(uint8_t *out, int64_t t0, int nt);
-    void get_raw_data(uint8_t *out, int64_t t0, int nt);
-    void get_complex_data(std::complex<float> *out, int64_t t0, int nt);
-    void get_visibilities(float *out, int64_t t0, int nt);
+    vdif_processor(const std::string &name, bool is_critical=false);
+    virtual ~vdif_processor() { }
 
-    // Decode (4+4)-bit offset encoding
+    bool is_running();
+    void set_running();
+
+    //
+    // These are the member functions which must be instantiated in order to define a vdif_processor.
+    //
+    // The assembler calls process_chunk() multiple times, presenting the processor with the appearance
+    // of a uniform sequence of assembled data.  When the stream ends, the assembler calls finalize().
+    // See below for details on how to use the assembled_chunk!
+    //
+    virtual void process_chunk(const std::shared_ptr<assembled_chunk> &a) = 0;
+    virtual void finalize() = 0;
+};
+
+
+//
+// Some processors which are currently implemented, in waterfall_plotter.cpp and rfi_histogrammer.cpp.
+//
+// We export factory functions returning pointers, in order to avoid polluting the .hpp files with details
+// of the processor implementations.
+//
+// waterfall_plotter.cpp is a good reference for implementing a vdif_processor.
+//
+std::shared_ptr<vdif_processor> make_waterfall_plotter(const std::string &outdir, bool is_critical=false);
+
+std::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_hdf5_filename, bool is_critical=false, bool ref_flag=false);
+
+
+// -------------------------------------------------------------------------------------------------
+//
+// assembled_chunk: from the perspective of the vdif_processor, this is the class which contains
+// the high-speed data.
+//
+// Each assembled chunk corresponds to range of timestamps [t0,t0+nt), where t0 is a 64-bit
+// wraparound-free timestamp. 
+//
+// WARNING 1: timestamps are always represented by 'int64_t', and it is a bug to convert to 'int'/
+// Be careful since it's easy to do this by accident!
+//
+// WARNING 2: Usually these ranges will be contiguous between calls, e.g.
+//   [t0,t0+nt)   [t0+nt,t0+2*nt)   [t0+2*nt,t0+3*nt)   ...
+// but the vdif_processor should not assume that this!  If there is a temporary 
+// interruption in data stream, then a timestamp gap will appear.
+//
+// The data is represented as a uint8_t array of shape (constants::chime_nfreq, 2, nt)
+// where the middle index is polarization.  Each uint8_t is an offset-encoded (4+4)-bit
+// complex number, see offset_decode() below for the conversion to a pair (re,im) where
+// re,im are integers between -7 and 7 inclusive.
+//
+// WARNING 3: Some entries in the data array will be 0x00, which is a special value
+// indicating "missing data".  Calling offset_decode() on these entries will return
+// (-8-8j) which is probably not what you want.  Handling missing data is an important
+// aspect of the vdif_processor since it happens all the time.  If a GPU correlator node 
+// is down, which is a frequent occurrence, then some frequencies will be "all missing".
+// There are also routine packet loss events on second-timescales which result in some
+// high-speed samples being flagged as missing data.
+//
+// When developing a new vdif_processor, I suggest starting by testing for missing data
+// with (if (byte != 0x00) ...) and using offset_decode() to convert to complex.  However
+// it's unlikely that a processor which uses this approach will be fast enough to run
+// on a real-time network capture!  Unfortunately it seems to be necessary to use
+// assembly language kernels.  
+//
+// You can see an example below in sum16_auto_correlations(),  where I started with a 
+// "reference" kernel which is easy to understand, and then wrote an equivalent assembly 
+// language kernel which is fast enough for production use.  I left the reference kernel
+// in the code as a way of documenting what the assembly language kernel actually does.
+// My plan is to keep doing this on an ad hoc basis as new vdif_processors are developed,
+// until we end up with a complete set of kernels, which hide the complexity of assembly
+// language in member functions of assembled_chunk.
+//
+// WARNING 4: For real-time network captures, assembly language kernels will probably
+// be necessary, feel free to email me if you need one!
+
+
+struct assembled_chunk : noncopyable {
+    //
+    // Offset-encoded raw data; array of shape (constants::chime_nfreq, 2, nt) 
+    // This data is read simultaneously by multiple threads, so don't modify it!
+    //
+    const uint8_t *const buf;
+
+    // Timestamp range
+    const int64_t t0;
+    const int nt;
+    
+    // Used internally by the assembler, modifying this field will probably crash or deadlock!
+    int pcount;
+
+    assembled_chunk(int64_t t0, int nt);
+    ~assembled_chunk();
+    
+    //
+    // Should probably never be used in "production" code (an assembly language kernel will
+    // probably be necessary) but useful during development.
+    //
     static inline void offset_decode(int &re, int &im, uint8_t byte)
     {
 	re = (int)((byte & 0xf0) >> 4) - 8;
 	im = (int)(byte & 0x0f) - 8;
     }
 
-    
-    
-    // helpers for run(), public for cython's benefit
-    int _run(vdif_stream &vs);
-    void _advance(int nt);
-    void _allocate();
-    void _deallocate();
-
-    // more catering to cython
-    void get_complex_data(float __complex__ *out, int64_t t0, int nt);
-    int64_t _get_buf_t0() { return buf_t0; }
-};
-
-
-// -------------------------------------------------------------------------------------------------
-//
-// "Processor" class
-//
-// This is just a wrapper for user-defined behavior!
-//
-// For an example of a processor class written in C++, see waterfall_plotter.cpp
-
-
-struct vdif_processor {
     //
-    // Called by the vdif_assembler whenever a chunk of assembled data is ready.
+    // This kernel is used in the waterfall plotter.  It returns the sum of all non-missing
+    // visibilities |E^2| over 16 timestamps, and a count of the number which were non-missing.
     //
-    // This routine will probably "call back" vdif_assembler::get_*() to get
-    // data it needs.  See the long comment in class vdif_assembler for more
-    // details.
-    //
-    virtual void process_data(vdif_assembler &a, int64_t t0, int nt) = 0;
+    static inline void sum16_auto_correlations_reference(int &sum, int &count, const uint8_t *buf)
+    {
+	int re, im;
+	sum = count = 0;
 
-    // Called when the input stream reaches EOF
-    virtual void finalize() = 0;
+	for (int i = 0; i < 16; i++) {
+	    if (buf[i] != 0) {
+		offset_decode(re, im, buf[i]);
+		sum += (re*re + im*im);
+		count += 1;
+	    }
+	}
+    }
 
-    virtual ~vdif_processor() { }
-};
-
-
-// -------------------------------------------------------------------------------------------------
-//
-// Virtual base class which represents an input stream to the vdif_assembler
-//
-// Different flavors of input stream are represented by different subclasses:
-//
-//   vdif_file: single file on disk
-//   vdif_acquisition: multiple files on disk, read in parallel from different threads for speed
-//   vdif_rt_stream: real-time network capture (currently in an "alpha" state)
-
-
-struct vdif_stream {
-    //
-    // Reads frame header at current position in stream.
-    //
-    virtual vdif_header read_header() const = 0;
+    // This is the equivalent assembly language version, which is much faster
+    static inline void sum16_auto_correlations(int &sum, int &count, const uint8_t *buf)
+    {
+	// Defined in ch_vdif_assembler_kernels.hpp
+	_sum16_auto_correlations(sum, count, buf);
+    }
 
     //
-    // Reads offset-encoded data into a shape-(8,625) array with 
-    // _column-major_ ordering
+    // This kernel fills two shape-(nfreq,2,nt) arrays:
+    //   efield: complex electric field values, with missing data represented by (0+0j)
+    //   mask: either 0 or 1 to indicate missing vs non-missing data
+    //
+    // FIXME: this kernel needs an assembly language version but I haven't written
+    // it yet!  (It's called from cython)
     // 
-    virtual void read_data(uint8_t *out) const = 0;
+    inline void fill_efield_array_reference(std::complex<float> *efield, int *mask)
+    {
+	int arr_size = constants::chime_nfreq * 2 * this->nt;
+	int re, im;
 
+	for (int i = 0; i < arr_size; i++) {
+	    if (buf[i] != 0) {
+		offset_decode(re, im, buf[i]);
+		efield[i] = std::complex<float> (float(re), float(im));
+		mask[i] = 1;
+	    }
+	    else {
+		efield[i] = std::complex<float> (0.0, 0.0);
+		mask[i] = 0;
+	    }
+	}
+    }
     //
-    // Reads offset-encoded data into a shape-(8,625) array with 
-    // row-major ordering and specified memory stride >= 625 for 
-    // the row (frequency) axis.
+    // This kernel fills two shape-(nfreq,2,nt) arrays:
+    //   vis: real auto correlations, with missing data represented by zeros
+    //   mask: either 0 or 1 to indicate missing vs non-missing data
     //
-    virtual void read_data_strided(uint8_t *out, int stride) const = 0;
+    // FIXME: this kernel needs an assembly language version but I haven't written
+    // it yet!  (It's used in rfi_histogrammer.cpp)
+    // 
+    inline void fill_auto_correlations_reference(float *vis, int *mask)
+    {
+	int arr_size = constants::chime_nfreq * 2 * this->nt;
+	int re, im;
 
-    // Advance to next frame in stream
-    virtual void advance() = 0;
-
-    // Is the stream at EOF?
-    virtual bool eof() const = 0;
-
-    virtual ~vdif_stream() { }
+	for (int i = 0; i < arr_size; i++) {
+	    if (buf[i] != 0) {
+		offset_decode(re, im, buf[i]);
+		vis[i] = (float)(re*re + im*im);
+		mask[i] = 1;
+	    }
+	    else {
+		vis[i] = 0.0;
+		mask[i] = 0;
+	    }
+	}
+    }	
 };
-
-
-//
-// Each row of the vdif file contains an (8,625) array containing
-// electric field measurements at 8 minor frequencies and 625 time
-// samples, at a fixed polarization and major frequency.  The "header"
-// contains information which identifies the row.
-//
-struct vdif_header {
-    int        freq_major;   // 0 <= freq_major < 128
-    int        pol;          // 0 <= pol < 2
-    uint32_t   fpga_count;   // 32-bit timestamp of first sample in row
-};
-
-
-//
-// vdif_file is a subclass of the virtual base class vdif_stream.
-// It defines a stream consisting of a single file.
-//
-struct vdif_file : public vdif_stream {
-    std::string filename;
-    int nrows;         // number of frames in file, derived from file size (always 50000 in practice?)
-    int current_row;   // current position in stream
-
-    boost::shared_array<uint8_t> data;
-
-    vdif_file(const std::string &filename);
-
-    // Devirtualize vdif_stream
-    virtual void advance();
-    virtual bool eof() const;
-    virtual void read_data(uint8_t *out) const;
-    virtual void read_data_strided(uint8_t *out, int stride) const;
-    virtual vdif_header read_header() const;
-    virtual ~vdif_file() { }
-
-    // returns empty pointer if exception gets thrown anywhere
-    static boost::shared_ptr<vdif_file> try_to_read(const std::string &filename);
-};
-
-
-//
-// Helper class for vdif_acquisition: context for one I/O thread.  (We use
-// multiple threads to read the acquisition files so that we can read from
-// multiple physical devices in parallel.)
-//
-struct vdif_acq_context {    
-    // read-only after construction, so not protected by mutex
-    std::vector<std::string> filename_list;
-    int nfiles;
-
-    // data exchange between IO and assembler threads
-    int consumer_fileid;
-    int producer_fileid;
-    boost::shared_ptr<vdif_file> curr_fptr;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond_file_produced;
-    pthread_cond_t cond_file_consumed;
-    
-    pthread_t thread;
-
-    vdif_acq_context(const std::vector<std::string> &filename_list);
-
-    // Called by producer (IO) thread
-    void add_file(const boost::shared_ptr<vdif_file> &f);
-    void wait_for_consumer();
-
-    // Called by consumer (assembler) thread
-    boost::shared_ptr<vdif_file> get_file();
-};
-
-
-//
-// vdif_acquisition is a subclass of the virtual base class vdif_stream.
-//
-// It defines a stream consisting of a sequence of files.
-//
-// The script 'show-moose-acquisitions.py' may be useful for generating
-// filename lists for the vdif_acquistion constructor!
-//
-class vdif_acquisition : public vdif_stream {
-protected:
-    std::vector< std::string > filename_list;
-    std::vector< boost::shared_ptr<vdif_acq_context> > context_list;
-    int nthreads;
-    int nfiles;
-
-    boost::shared_ptr<vdif_file> curr_fptr;
-    int curr_fileid;
-
-    void _construct(const std::vector<std::string> &filename_list, int nthreads);
-    void _get_fptr_from_iothread(int it);
-
-public:
-    // Construct from list of filenames
-    vdif_acquisition(const std::vector<std::string> &filename_list, int nthreads=10);
-
-    // Construct from file which contains a list of filenames (one per line)
-    vdif_acquisition(const std::string &list_filename, int nthreads=10);
-
-    // Devirtualize vdif_stream
-    virtual void advance();
-    virtual bool eof() const;
-    virtual void read_data(uint8_t *out) const;
-    virtual void read_data_strided(uint8_t *out, int stride) const;
-    virtual vdif_header read_header() const;
-    virtual ~vdif_acquisition() { }
-};
-
-
-//
-// Helper class for vdif_rt_stream.
-//
-struct vdif_rt_context
-{
-    vdif_rt_context(int ring_buffer_size = 65536);
-    
-    int nring;
-    uint8_t *packet0;
-    int64_t packet_stride;
-    
-    // packet index currently being processed by producer/consumer
-    int64_t ix_producer;
-    int64_t ix_consumer;
-    bool eof;
-
-    pthread_mutex_t mutex;
-    pthread_cond_t cond_packet_produced;
-    pthread_cond_t cond_packet_consumed;
-
-    std::vector<uint8_t> allocated_slab;
-    pthread_t io_thread;
-
-    uint8_t *advance_producer();
-    uint8_t *advance_consumer();
-    void set_eof();
-};
-
-
-//
-// vdif_rt_stream: reperesents a real-time network stream
-//
-struct vdif_rt_stream : public vdif_stream
-{
-    boost::shared_ptr<vdif_rt_context> context;
-    uint8_t *current_packet;
-
-    vdif_rt_stream(int ring_buffer_size = 65536);
-
-    // Devirtualize vdif_stream
-    virtual void advance();
-    virtual bool eof() const;
-    virtual void read_data(uint8_t *out) const;
-    virtual void read_data_strided(uint8_t *out, int stride) const;
-    virtual vdif_header read_header() const;
-    virtual ~vdif_rt_stream() { }
-};
-
-
-// -------------------------------------------------------------------------------------------------
-//
-// Some processing classes that have been useful so far
-
-
-// waterfall_plotter.cpp
-extern boost::shared_ptr<vdif_processor> make_waterfall_plotter(const std::string &outdir);
-
-// rfi_histogrammer.cpp
-extern boost::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_hdf5_filename, bool ref_flag);
 
 
 }  // namespace ch_vdif_assembler
 
-#endif  // _CH_VDIF_ASSEMBLER_HPP
-
-/*
- * Local variables:
- *  c-basic-offset: 4
- * End:
- */
+#endif // _CH_VDIF_ASSEMBLER_HPP

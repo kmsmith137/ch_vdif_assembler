@@ -5,7 +5,7 @@ import re
 import sys
 
 
-def index_thumbnails(dirname):
+def index_waterfalls(dirname):
     imgdir = os.path.join(dirname, 'img')
 
     fname_hash = { }   # (imtype,pol,frame_ix) -> filename
@@ -55,7 +55,7 @@ def index_thumbnails(dirname):
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print >>sys.stderr, 'usage: index-thumbnails.py <waterfall_outdir>'
+        print >>sys.stderr, 'usage: index_vdif_waterfalls.py <waterfall_outdir>'
         sys.exit(2)
 
-    index_thumbnails(sys.argv[1])
+    index_waterfalls(sys.argv[1])

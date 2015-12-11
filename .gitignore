@@ -2,8 +2,8 @@
 *.o
 *.so
 *.pyc
-ch_vdif_assembler_c.cpp
-TODO
+*_cython.cpp
 Makefile.local
-test-timestream-unwrapper
+test-kernels
+test-timestamp-unwrapper
 run-vdif-assembler

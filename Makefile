@@ -3,35 +3,64 @@
 #   LIBDIR   install dir for C++ libraries
 #   INCDIR   install dir for C++ headers
 #   PYDIR    install dir for python/cython modules
-#   CPP      g++ compiler command line (including -pthread or -lpthread if necessary)
+#   CPP      g++ compiler command line (must support c++0x, and -lpthread or -pthread if necessary)
 #
 # See Makefile.local.example for an example.
 
 include Makefile.local
 
-all: libch_vdif_assembler.so ch_vdif_assembler_c.so run-vdif-assembler
+INCFILES=ch_vdif_assembler.hpp ch_vdif_assembler_internals.hpp ch_vdif_assembler_kernels.hpp
+BINFILES=run-vdif-assembler
+LIBFILES=libch_vdif_assembler.so
+LIBCYTHON=ch_vdif_assembler_cython.so
+PYMODULES=ch_vdif_assembler.py
+SCRIPTS=show-moose-acquisitions.py index_vdif_waterfalls.py
+TESTBINFILES=test-timestamp-unwrapper test-kernels
 
-%.o: %.cpp ch_vdif_assembler.hpp
+OFILES=assembler_nerve_center.o assembler_thread.o disk_reader_thread.o disk_writer_thread.o misc.o network_thread.o processing_thread.o rfi_histogrammer.o sim_thread.o timing_thread.o waterfall_plotter.o
+
+# all: libch_vdif_assembler.so ch_vdif_assembler_c.so run-vdif-assembler
+all: $(BINFILES) $(LIBFILES) $(LIBCYTHON) $(TESTBINFILES)
+
+cython: $(LIBCYTHON)
+
+%.o: %.cpp $(INCFILES)
 	$(CPP) -c -o $@ $<
 
-libch_vdif_assembler.so: ch_vdif_assembler.o waterfall_plotter.o rfi_histogrammer.o
-	$(CPP) -o $@ -shared $^
-
-ch_vdif_assembler_c.cpp: ch_vdif_assembler_c.pyx _ch_vdif_assembler_c.pxd ch_vdif_assembler.hpp
+%_cython.cpp: %_cython.pyx ch_vdif_assembler_pxd.pxd ch_vdif_assembler_cython.hpp $(INCFILES)
 	cython --cplus $<
 
-ch_vdif_assembler_c.so: ch_vdif_assembler_c.cpp libch_vdif_assembler.so
-	$(CPP) -shared -o $@ $< -L. -lch_vdif_assembler -lhdf5 -lpng
+libch_vdif_assembler.so: $(OFILES)
+	$(CPP) -o $@ -shared $^
+
+ch_vdif_assembler_cython.so: ch_vdif_assembler_cython.cpp libch_vdif_assembler.so
+	$(CPP) -shared -o $@ $< -lch_vdif_assembler -lhdf5 -lpng
 
 run-vdif-assembler: run-vdif-assembler.o libch_vdif_assembler.so
-	$(CPP) -o $@ $< -L. -lch_vdif_assembler -lhdf5 -lpng
+	$(CPP) -o $@ $< -lch_vdif_assembler -lhdf5 -lpng
 
-install: libch_vdif_assembler.so ch_vdif_assembler_c.so run-vdif-assembler
-	cp -f ch_vdif_assembler.hpp $(INCDIR)/ch_vdif_assembler.hpp
-	cp -f libch_vdif_assembler.so $(LIBDIR)/libch_vdif_assembler.so
-	cp -f ch_vdif_assembler_c.so $(PYDIR)/ch_vdif_assembler_c.so
-	cp -f ch_vdif_assembler.py $(PYDIR)/ch_vdif_assembler.py
-	cp -f run-vdif-assembler show-moose-acquisitions.py $(BINDIR)/
+test-timestamp-unwrapper: test-timestamp-unwrapper.cpp ch_vdif_assembler_internals.hpp
+	$(CPP) -o $@ $<
+
+test-kernels: test-kernels.cpp ch_vdif_assembler_kernels.hpp
+	$(CPP) -o $@ $<
+
+test: $(TESTBINFILES)
+	for f in $(TESTBINFILES); do ./$$f; done
+
+install: $(INCFILES) $(BINFILES) $(LIBFILES) $(LIBCYTHON)
+	cp -f $(INCFILES) $(INCDIR)/
+	cp -f $(LIBFILES) $(LIBDIR)/
+	cp -f $(BINFILES) $(SCRIPTS) $(BINDIR)/
+	cp -f $(LIBCYTHON) $(PYMODULES) $(PYDIR)/
+
+#cp -f run-vdif-assembler show-moose-acquisitions.py $(BINDIR)/
+
+uninstall:
+	for f in $(INCFILES); do rm -f $(INCDIR)/$$f; done
+	for f in $(LIBFILES); do rm -f $(LIBDIR)/$$f; done
+	for f in $(BINFILES) $(SCRIPTS); do rm -f $(BINDIR)/$$f; done
+	for f in $(LIBCYTHON) $(PYMODULES); do rm -f $(PYDIR)/$$f; done
 
 clean:
-	rm -f *~ *.o *.so *.pyc ch_vdif_assembler_c.cpp run-vdif-assembler
+	rm -f *~ *.o *_cython.cpp *.so *.pyc $(BINFILES) $(TESTBINFILES)

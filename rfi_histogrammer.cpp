@@ -7,13 +7,11 @@
 
 #include <cstring>
 #include <stdexcept>
-#include <boost/make_shared.hpp>
 
 #include <hdf5.h>
 #include "ch_vdif_assembler.hpp"
 
 using namespace std;
-using namespace boost;
 
 // backwards compatibility hacks for HDF5 1.6
 #if H5_VERS_MINOR == 6
@@ -26,11 +24,6 @@ using namespace boost;
 #  define H5Ewalk1 H5Ewalk
 #  define H5E_error1_t H5E_error_t
 #  define H5Gopen1 H5Gopen
-#endif
-
-#ifndef xassert
-#define xassert(cond) xassert2(cond, __LINE__)
-#define xassert2(cond,line) do { if (!(cond)) throw std::runtime_error("Assevdifon '" __STRING(cond) "' failed (" __FILE__ ":" __STRING(line) ")"); } while (0)
 #endif
 
 namespace ch_vdif_assembler {
@@ -110,7 +103,7 @@ struct histogram_set {
     void add_sample(int64_t t, double vis);
 
     // written to be fast, unit tested by comparing to add_sample()
-    void add_samples(int64_t t0, int nt, const float *vis, const uint8_t *counts, bool ref_flag=false);
+    void add_samples(int64_t t0, int nt, const float *vis, const int *counts, bool ref_flag=false);
 
     // helper for add_samples()
     void _add_binned_samples(int p, int64_t b0, int64_t b1, const double *vis_binned, const double *counts_binned);
@@ -224,7 +217,7 @@ void histogram_set::_add_binned_samples(int p, int64_t b0, int64_t b1, const dou
 }
 
 
-void histogram_set::add_samples(int64_t t0, int nt, const float *vis_arr, const uint8_t *flag_arr, bool ref_flag)
+void histogram_set::add_samples(int64_t t0, int nt, const float *vis_arr, const int *flag_arr, bool ref_flag)
 {
     if (ref_flag) {
 	for (int i = 0; i < nt; i++) {
@@ -314,18 +307,21 @@ struct rfi_histogrammer : public vdif_processor {
     bool ref_flag;
 
     // If @ref_flag is specified, then the reference implementation will be used (slow but simple code)
-    rfi_histogrammer(const string &output_hdf5_filename, bool ref_flag=false);
+    rfi_histogrammer(const string &output_hdf5_filename, bool is_critical, bool ref_flag);
 
     void write_hdf5_file(const string &filename) const;
 
     // Devirtualize vdif_assembler_callback
-    virtual void process_data(vdif_assembler &a, int64_t t0, int nt);
+    virtual void initialize() { }
+    virtual void process_chunk(const shared_ptr<assembled_chunk> &a);
     virtual void finalize();
 };
 
 
-rfi_histogrammer::rfi_histogrammer(const string &output_hdf5_filename_, bool ref_flag_)
-    : output_hdf5_filename(output_hdf5_filename_), ref_flag(ref_flag_)
+rfi_histogrammer::rfi_histogrammer(const string &output_hdf5_filename_, bool is_critical_, bool ref_flag_)
+    : vdif_processor("rfi_histogrammer", is_critical_),
+      output_hdf5_filename(output_hdf5_filename_), 
+      ref_flag(ref_flag_)
 { 
     for (int ifreq = 0; ifreq < 1024; ifreq++)
 	for (int pol = 0; pol < 2; pol++)
@@ -346,7 +342,7 @@ void rfi_histogrammer::write_hdf5_file(const string &filename) const
     }
 
     hid_t group_id = H5Gopen1(file_id, ".");
-    assert(group_id >= 0);
+    xassert(group_id >= 0);
 
     for (int p = histogram_set::pmin; p <= histogram_set::pmax; p++) {
 	// use single precision floating-point to allow large dynamic range while saving disk space
@@ -355,7 +351,7 @@ void rfi_histogrammer::write_hdf5_file(const string &filename) const
 
 	for (unsigned int i = 0; i < histograms.size(); i++) {
 	    const histogram &h = this->histograms[i].histograms[p];
-	    assert(h.n == nbins);
+	    xassert(h.n == nbins);
 
 	    for (int j = 0; j < nbins; j++)
 		all_counts[i*nbins + j] = (float)h.counts[j];
@@ -367,22 +363,20 @@ void rfi_histogrammer::write_hdf5_file(const string &filename) const
 	shape[2] = nbins;  
 	
 	hid_t dataspace_id = H5Screate(H5S_SIMPLE);
-	assert(dataspace_id >= 0);
+	xassert(dataspace_id >= 0);
 
 	int ret = H5Sset_extent_simple(dataspace_id, 3, &shape[0], &shape[0]);
-	assert(ret >= 0);
+	xassert(ret >= 0);
 
 	stringstream s;
 	s << "BIN" << (1 << p);
 	string dataset_name = s.str();
 	
 	hid_t dataset_id = H5Dcreate1(group_id, dataset_name.c_str(), H5T_NATIVE_FLOAT, dataspace_id, H5P_DEFAULT);
-
-	if (dataset_id < 0)
-	assert(dataset_id >= 0);
+	xassert(dataset_id >= 0);
 
 	ret = H5Dwrite(dataset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &all_counts[0]);
-	assert(ret >= 0);
+	xassert(ret >= 0);
 	
 	cerr << filename << ": wrote shape (1024,2," << nbins << ") array\n";
     }
@@ -392,17 +386,18 @@ void rfi_histogrammer::write_hdf5_file(const string &filename) const
 }
 
 
-void rfi_histogrammer::process_data(vdif_assembler &a, int64_t t0, int nt)
+void rfi_histogrammer::process_chunk(const shared_ptr<assembled_chunk> &chunk)
 {
-    vector<float> vis(4096 * nt, 0);
-    vector<uint8_t> mask(2048 * nt, 0);
+    int nt = chunk->nt;
+    int64_t t0 = chunk->t0;
 
-    a.get_visibilities(&vis[0], t0, nt);
-    a.get_mask(&mask[0], t0, nt);
+    vector<float> vis(2048 * nt, 0);
+    vector<int> mask(2048 * nt, 0);
+    chunk->fill_auto_correlations_reference(&vis[0], &mask[0]);
 
     for (int ifreq = 0; ifreq < 1024; ifreq++) {
-	histograms[2*ifreq].add_samples(t0, nt, &vis[4*ifreq*nt], &mask[2*ifreq*nt], this->ref_flag);
-	histograms[2*ifreq+1].add_samples(t0, nt, &vis[(4*ifreq+1)*nt], &mask[(2*ifreq+1)*nt], this->ref_flag);
+	histograms[2*ifreq].add_samples(t0, nt, &vis[2*ifreq*nt], &mask[2*ifreq*nt], this->ref_flag);
+	histograms[2*ifreq+1].add_samples(t0, nt, &vis[(2*ifreq+1)*nt], &mask[(2*ifreq+1)*nt], this->ref_flag);
     }
 }
 
@@ -417,9 +412,9 @@ void rfi_histogrammer::finalize()
 }
 
 
-shared_ptr<vdif_processor> make_rfi_histogrammer(const string &output_hdf5_filename, bool ref_flag)
+shared_ptr<vdif_processor> make_rfi_histogrammer(const string &output_hdf5_filename, bool is_critical, bool ref_flag)
 {
-    return boost::make_shared<rfi_histogrammer> (output_hdf5_filename, ref_flag);
+    return make_shared<rfi_histogrammer> (output_hdf5_filename, is_critical, ref_flag);
 }
 
 

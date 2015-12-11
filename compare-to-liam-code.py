@@ -12,6 +12,8 @@ import ch_vdif_assembler
 # Liam code
 import ReadBeamform
 
+#rand.seed(123)
+
 
 if len(sys.argv) != 2:
     print >>sys.stderr, 'Usage: compare-to-liam-code.py <acq_name>'
@@ -20,12 +22,7 @@ if len(sys.argv) != 2:
     sys.exit(2)
 
 acq_name = sys.argv[1]
-
-# rand.seed(123)
-
-inv = ch_vdif_assembler.moose_inventory()
-filename_list = inv.get_filename_list(acq_name)
-
+filename_list = ch_vdif_assembler.moose_filename_list(acq_name)
 
 def br_read_file(filename):
     """
@@ -114,10 +111,17 @@ for filename in filename_list:
                 t_ix = fpga_site - fpga0
                 assert 0 <= t_ix < 625
 
-                liam[freq,pol,site_ix] = row_data[t_ix,frame_ix,0] + row_data[t_ix,frame_ix,1]*1j
+                re = row_data[t_ix,frame_ix,0]
+                im = row_data[t_ix,frame_ix,1]
+
+                # emulate masking logic in ch_vdif_assembler
+                if (re < -7.5) and (im < -7.5):
+                    continue
+                
+                liam[freq,pol,site_ix] = re + im*1j
 
 
-class kms_reader:
+class kms_reader(ch_vdif_assembler.processor):
     def __init__(self, sites, output_arr):
         self.sites = sites
         self.output = output_arr
@@ -126,12 +130,9 @@ class kms_reader:
         assert output_arr.shape == (1024, 2, self.sites.shape[-1])
 
 
-    def process_data(self, asm, t0, nt):
-        mask = asm.get_mask(t0, nt)
-        assert mask.shape == (1024, 2, nt)
-
-        data = asm.get_complex_data(t0, nt)
+    def process_chunk(self, t0, nt, data, mask):
         assert data.shape == (1024, 2, nt)
+        assert mask.shape == (1024, 2, nt)
 
         for freq in xrange(1024):
             for pol in xrange(2):
@@ -152,13 +153,12 @@ class kms_reader:
 
 print >>sys.stderr, "\nReading files with ch_vdif_assembler"
 
-# an assembler which keeps everything
-asm = ch_vdif_assembler.vdif_assembler(mask_zeros=False, mask_rails=False, mask_rfi=False, trim_frac=0, buf_nt=2**17, allow_drops=False)
+# 2^17 was large enough to avoid drops in the example I used
+assembler = ch_vdif_assembler.assembler(assembler_nt = 2**17)
+assembler.register_processor(kms_reader(sites,kms))
 
-asm.register_processor(kms_reader(sites,kms))
-
-acq = ch_vdif_assembler.vdif_acquisition(filename_list)
-asm.run(acq)
+s = ch_vdif_assembler.make_file_stream(filename_list)
+assembler.run(s)
 
 (fi,pi,ti) = np.where(np.abs(kms-liam) > 0.1)
 n = len(fi)
@@ -169,4 +169,5 @@ if n == 0:
 
 # Just print first failure
 (fi,pi,ti) = (fi[0],pi[0],ti[0])
-print 'At fi=%s, pi=%s, ti=%s:  kms=%s  liam=%s' % (fi, pi, ti, kms[fi,pi,ti], liam[fi,pi,ti])
+fpga = sites[fi,pi,ti]
+print 'At fi=%s, pi=%s, ti=%s, fpga=%s:  kms=%s  liam=%s' % (fi, pi, ti, fpga, kms[fi,pi,ti], liam[fi,pi,ti])

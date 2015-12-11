@@ -12,7 +12,7 @@
 # acquisitions.  Each acq_name can be a complete acquisition name, e.g.
 # 20150910T041537Z_chime_beamformed, or a uniquely determining substring,
 # e.g. 41537.  (I often redirect the output to a file, in order to supply
-# a filename list to another program.)
+# a filename list to another program, such as run-vdif-assembler.cpp)
 #
 
 
