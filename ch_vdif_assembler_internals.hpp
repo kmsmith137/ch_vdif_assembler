@@ -46,8 +46,8 @@ inline double uniform_rand()
 inline int randint(int lo, int hi)
 {
     int ret = lo + (int)((hi-lo)*uniform_rand());
-    ret = std::max(ret, lo);  // should be redundant
-    ret = std::min(ret, hi);  // should be redundant
+    ret = std::max(ret, lo);    // should be redundant
+    ret = std::min(ret, hi-1);  // should be redundant
     return ret;
 }
 
