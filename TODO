@@ -8,6 +8,8 @@
      doesn't abort the processing, since it's being "swallowed" by the python interpreter
      (an easy fix would be to add a 1-sec timeout to assembler.wait_for_end() and
      loop it)
+   - it appears that the vdif_assembler destructor doesn't always get called at the end
+     of ./run-vdif-assembler (?)
 
 - Reinstate a few loose ends from v1 (most importantly the RFI mask)
 

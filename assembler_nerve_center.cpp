@@ -190,6 +190,16 @@ void assembler_nerve_center::check_alive()
 }    
 
 
+void assembler_nerve_center::get_drop_stats(int &ndrops_assembler_, int &ndrops_disk_writer_, int &ntot)
+{
+    pthread_mutex_lock(&mutex);   // not lock() or _lock()
+    ndrops_assembler_ = this->ndrops_assembler;
+    ndrops_disk_writer_ = this->ndrops_disk_writer;
+    ntot = rbuf_ix;
+    pthread_mutex_unlock(&mutex);
+}
+
+
 void assembler_nerve_center::kill_assembler(const char *killmsg_)
 {
     // not assembler_nerve_center::lock()

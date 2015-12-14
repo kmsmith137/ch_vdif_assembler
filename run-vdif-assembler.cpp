@@ -17,6 +17,7 @@ static void usage()
 	 << "    -s                                 to run on a simulated network capture (6.4 Gbps, 60 sec)\n"
 	 << "    -t                                 to run in \"timing mode\": reported running time will be determined by the slowest thread\n"
 	 << "    -d                                 to save stream on disk (will no-op if already running on a disk capture)\n"
+	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers\n"
 	 << "\n"
 	 << "You may find the script show-moose-acqusitions.py useful for making file lists\n"
 	 << "\n"
@@ -31,6 +32,49 @@ static void usage()
 }
 
 
+// -------------------------------------------------------------------------------------------------
+//
+// mischief thread
+
+
+// these globals are initialized in main(), before spawning the thread
+static pthread_t mischief_thread;
+static pthread_mutex_t mischief_mutex;
+static bool mischief_killflag;
+
+
+static void *mischief_pthread_main(void *arg)
+{
+    static const int nbytes = (1 << 29);  // 0.5 GB
+    
+    char *buf1 = new char[nbytes];
+    char *buf2 = new char[nbytes];
+
+    memset(buf1, 0, nbytes);
+    memset(buf2, 0, nbytes);
+    
+    cout << "mischief thread running\n" << flush;
+    
+    // caller initializes mutex, conditional
+    for (;;) {
+	pthread_mutex_lock(&mischief_mutex);
+
+	if (mischief_killflag) {
+	    pthread_mutex_unlock(&mischief_mutex);
+	    cout << "mischief thread done\n" << flush;
+	    return NULL;
+	}
+
+	pthread_mutex_unlock(&mischief_mutex);
+	memcpy(buf1, buf2, nbytes);
+	memcpy(buf2, buf1, nbytes);
+    }
+}
+
+
+// -------------------------------------------------------------------------------------------------
+
+
 int main(int argc, char **argv)
 {
     // only used in timing thread (-t)
@@ -39,6 +83,7 @@ int main(int argc, char **argv)
 
     bool is_timing = false;
     bool write_to_disk = false;
+    bool mischief_flag = false;
     shared_ptr<vdif_stream> stream;
     shared_ptr<vdif_processor> waterfall_plotter;
     shared_ptr<vdif_processor> rfi_histogrammer;
@@ -88,6 +133,14 @@ int main(int argc, char **argv)
 		usage();
 	    stream = make_timing_stream(timing_npackets_per_chunk, timing_nchunks);
 	    is_timing = true;
+	    pos++;
+	    continue;
+	}
+
+	if (cs == 'm') {
+	    if (mischief_flag)
+		usage();
+	    mischief_flag = true;
 	    pos++;
 	    continue;
 	}
@@ -148,6 +201,16 @@ int main(int argc, char **argv)
     for (unsigned int i = 0; i < processors.size(); i++)
 	assembler.register_processor(processors[i]);
 
+    if (mischief_flag) {
+	pthread_mutex_init(&mischief_mutex, NULL);
+	mischief_killflag = false;
+	
+	if (pthread_create(&mischief_thread, NULL, mischief_pthread_main, NULL) < 0) {
+	    cout << (string("couldn't spawn mischief thread: ") + strerror(errno) + "\n") << flush;
+	    exit(1);
+	}
+    }
+
     struct timeval tv0 = get_time();
 
     assembler.run(stream);
@@ -161,6 +224,17 @@ int main(int argc, char **argv)
 	stringstream ss;
 	ss << "vdif-assembler: processed " << gbytes << " GB at " << gbps << " Gbps\n";
 	cout << ss.str() << flush;
+    }
+
+    if (mischief_flag) {
+	pthread_mutex_lock(&mischief_mutex);
+	mischief_killflag = true;
+	pthread_mutex_unlock(&mischief_mutex);
+
+	if (pthread_join(mischief_thread, NULL) != 0) {
+	    cout << (string("couldn't join mischief thread: ") + strerror(errno) + "\n") << flush;
+	    exit(1);
+	}
     }
 
     return 0;

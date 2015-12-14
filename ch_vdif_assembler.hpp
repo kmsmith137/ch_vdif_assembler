@@ -182,7 +182,8 @@ struct vdif_assembler
     // calls trigger().
     //
     vdif_assembler(bool write_to_disk=false, int rbuf_size=constants::num_disks, int abuf_size=4, int assembler_nt=65536);
-    
+    ~vdif_assembler();
+
     // Each call to register_processor() spawns one processing thread.
     void register_processor(const std::shared_ptr<vdif_processor> &p);
     

@@ -248,6 +248,24 @@ vdif_assembler::vdif_assembler(bool write_to_disk, int rbuf_size, int abuf_size,
 }
 
 
+vdif_assembler::~vdif_assembler()
+{
+    int ndrops_assembler, ndrops_disk_writer, ntot;
+    nc->get_drop_stats(ndrops_assembler, ndrops_disk_writer, ntot);
+
+    double afrac = (ntot > 0) ? ((double)ndrops_assembler / (double)ntot) : 0.0;
+    double dfrac = (ntot > 0) ? ((double)ndrops_disk_writer / (double)ntot) : 0.0;
+
+    stringstream ss;
+    ss << "assembler: " << ntot << " buffers processed, "
+       << ndrops_assembler << " assembler drops (frac=" << afrac << "), "
+       << ndrops_disk_writer << " disk writer drops (frac=" << dfrac << ")\n";
+
+    string s = ss.str();
+    cout << s.c_str() << flush;
+}
+
+
 void vdif_assembler::register_processor(const shared_ptr<vdif_processor> &p)
 {
     spawn_processing_thread(nc, p);
@@ -418,7 +436,8 @@ string make_dataset_name()
     timeinfo = gmtime(&rawtime);
     strftime(data_time, sizeof(data_time), "%Y%m%dT%H%M%SZ", timeinfo);
 
-    string dataset_name = string(data_time) + "_chime_beamformed";
+    // string dataset_name = string(data_time) + "_chime_beamformed";
+    string dataset_name = string(data_time) + "_vdif_assembler";
     return dataset_name;
 }
 

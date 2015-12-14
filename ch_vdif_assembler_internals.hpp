@@ -300,6 +300,7 @@ public:
 
     // High-level control
     void check_alive();
+    void get_drop_stats(int &ndrops_assembler, int &ndrops_disk_writer, int &ntot);
     void kill_assembler(const char *killmsg);
     void wait_until_end();
     void set_non_realtime();
