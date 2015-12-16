@@ -7,3 +7,5 @@ Makefile.local
 test-kernels
 test-timestamp-unwrapper
 run-vdif-assembler
+time-kernels
+peek-at-kernels

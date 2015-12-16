@@ -82,6 +82,16 @@ inline std::string str16(__m128i x)
 }
 
 
+// useful for debugging
+inline bool equal128(__m128i x, __m128i y)
+{
+    return ((_mm_extract_epi32(x,0) == _mm_extract_epi32(y,0)) &&
+	    (_mm_extract_epi32(x,1) == _mm_extract_epi32(y,1)) &&
+	    (_mm_extract_epi32(x,2) == _mm_extract_epi32(y,2)) &&
+	    (_mm_extract_epi32(x,3) == _mm_extract_epi32(y,3)));
+}
+
+
 // -------------------------------------------------------------------------------------------------
 //
 // Assembler kernel
@@ -103,7 +113,7 @@ inline void _assemble8(uint8_t *dst, int stride, const uint8_t *src, int n)
 }
 
 
-// FIXME reduce
+// This is ready to be ported to AVX2, by adding 8 permute instructions (see also XXX below)
 inline void _assembler_kernel(__m128i &x0, __m128i &x1, __m128i &x2, __m128i &x3, __m128i &x4, __m128i &x5, __m128i &x6, __m128i &x7, const __m128i *src)
 {
     __m128i a0 = _mm_loadu_si128(src);
@@ -114,10 +124,11 @@ inline void _assembler_kernel(__m128i &x0, __m128i &x1, __m128i &x2, __m128i &x3
     __m128i a5 = _mm_loadu_si128(src+5);
     __m128i a6 = _mm_loadu_si128(src+6);
     __m128i a7 = _mm_loadu_si128(src+7);
-    
-    static const __m128i ctl0 = _mm_set_epi8(15,7,13,5,11,3,9,1,14,6,12,4,10,2,8,0);
-    static const __m128i ctl1 = _mm_set_epi8(14,6,12,4,10,2,8,0,15,7,13,5,11,3,9,1);
 
+    static const __m128i ctl0 = _mm_set_epi8(15,7,14,6,13,5,12,4,11,3,10,2,9,1,8,0);
+    static const __m128i ctl1 = _mm_set_epi8(14,6,15,7,12,4,13,5,10,2,11,3,8,0,9,1);
+
+    // Note: _mm_shuffle_epi8 is expensive, so we use 8 calls, which is the minimum possible
     a0 = _mm_shuffle_epi8(a0, ctl0);
     a1 = _mm_shuffle_epi8(a1, ctl1);
     a2 = _mm_shuffle_epi8(a2, ctl0);
@@ -127,103 +138,66 @@ inline void _assembler_kernel(__m128i &x0, __m128i &x1, __m128i &x2, __m128i &x3
     a6 = _mm_shuffle_epi8(a6, ctl0);
     a7 = _mm_shuffle_epi8(a7, ctl1);
 
-    __m128i b0 = _mm_alignr_epi8(a0, a1, 8);
-    __m128i b1 = _mm_alignr_epi8(a1, a0, 8);
-    __m128i b2 = _mm_alignr_epi8(a2, a3, 8);
-    __m128i b3 = _mm_alignr_epi8(a3, a2, 8);
-    __m128i b4 = _mm_alignr_epi8(a4, a5, 8);
-    __m128i b5 = _mm_alignr_epi8(a5, a4, 8);
-    __m128i b6 = _mm_alignr_epi8(a6, a7, 8);
-    __m128i b7 = _mm_alignr_epi8(a7, a6, 8);
+    __m128i b0 = _mm_blend_epi16(a0, a1, 0xaa);  // (10101010)_2
+    __m128i b1 = _mm_blend_epi16(a1, a0, 0xaa);
+    __m128i b2 = _mm_blend_epi16(a2, a3, 0xaa);
+    __m128i b3 = _mm_blend_epi16(a3, a2, 0xaa);
+    __m128i b4 = _mm_blend_epi16(a4, a5, 0xaa);
+    __m128i b5 = _mm_blend_epi16(a5, a4, 0xaa);
+    __m128i b6 = _mm_blend_epi16(a6, a7, 0xaa);
+    __m128i b7 = _mm_blend_epi16(a7, a6, 0xaa);
 
-    a0 = b0;
-    a1 = b1;
-    a2 = b2;
-    a3 = b3;
-    a4 = b4;
-    a5 = b5;
-    a6 = b6;
-    a7 = b7;
+    b1 = _mm_shufflelo_epi16(_mm_shufflehi_epi16(b1, 0xb1), 0xb1);
+    b5 = _mm_shufflelo_epi16(_mm_shufflehi_epi16(b5, 0xb1), 0xb1);
 
-    static const __m128i ctl2 = _mm_set_epi8(7,3,6,2,15,11,14,10,5,1,4,0,13,9,12,8);
-    static const __m128i ctl3 = _mm_set_epi8(15,11,14,10,7,3,6,2,13,9,12,8,5,1,4,0);
-    static const __m128i ctl4 = _mm_set_epi8(5,1,4,0,13,9,12,8,7,3,6,2,15,11,14,10);
-    static const __m128i ctl5 = _mm_set_epi8(13,9,12,8,5,1,4,0,15,11,14,10,7,3,6,2);
+    b2 = _mm_shuffle_epi32(b2, 0xb1);   // (2301)_4
+    b6 = _mm_shuffle_epi32(b6, 0xb1);   // (2301)_4
 
-    a0 = _mm_shuffle_epi8(a0, ctl2);
-    a1 = _mm_shuffle_epi8(a1, ctl3);
-    a2 = _mm_shuffle_epi8(a2, ctl4);
-    a3 = _mm_shuffle_epi8(a3, ctl5);
-    a4 = _mm_shuffle_epi8(a4, ctl2);
-    a5 = _mm_shuffle_epi8(a5, ctl3);
-    a6 = _mm_shuffle_epi8(a6, ctl4);
-    a7 = _mm_shuffle_epi8(a7, ctl5);
+    b3 = _mm_shufflelo_epi16(_mm_shufflehi_epi16(b3, 0x1b), 0x1b);  // (0123)_4
+    b7 = _mm_shufflelo_epi16(_mm_shufflehi_epi16(b7, 0x1b), 0x1b);
 
-    b0 = _mm_alignr_epi8(a0, a2, 8);
-    b1 = _mm_alignr_epi8(a1, a3, 8);
-    b2 = _mm_alignr_epi8(a2, a0, 8);
-    b3 = _mm_alignr_epi8(a3, a1, 8);
-    b4 = _mm_alignr_epi8(a4, a6, 8);
-    b5 = _mm_alignr_epi8(a5, a7, 8);
-    b6 = _mm_alignr_epi8(a6, a4, 8);
-    b7 = _mm_alignr_epi8(a7, a5, 8);
+    // XXX when switching to AVX2, replace blend_epi16(0xcc) -> blend_epi32(0xa) for a small performance boost
+    a0 = _mm_blend_epi16(b0, b2, 0xcc);  // (11001100)_2
+    a2 = _mm_blend_epi16(b2, b0, 0xcc);
+    a1 = _mm_blend_epi16(b1, b3, 0xcc);
+    a3 = _mm_blend_epi16(b3, b1, 0xcc);
+    a4 = _mm_blend_epi16(b4, b6, 0xcc);
+    a6 = _mm_blend_epi16(b6, b4, 0xcc);
+    a5 = _mm_blend_epi16(b5, b7, 0xcc);
+    a7 = _mm_blend_epi16(b7, b5, 0xcc);
 
-    a0 = b0;
-    a1 = b1;
-    a2 = b2;
-    a3 = b3;
-    a4 = b4;
-    a5 = b5;
-    a6 = b6;
-    a7 = b7;
+    a2 = _mm_shuffle_epi32(a2, 0xb1);   // (2301)_4
+    a3 = _mm_shuffle_epi32(a3, 0xb1);   // (2301)_4
 
-    static const __m128i ctl6 = _mm_set_epi8(7,5,3,1,15,13,11,9,6,4,2,0,14,12,10,8);
-    static const __m128i ctl7 = _mm_set_epi8(15,13,11,9,7,5,3,1,14,12,10,8,6,4,2,0);
-    static const __m128i ctl8 = _mm_set_epi8(6,4,2,0,14,12,10,8,7,5,3,1,15,13,11,9);
-    static const __m128i ctl9 = _mm_set_epi8(14,12,10,8,6,4,2,0,15,13,11,9,7,5,3,1);
+    a4 = _mm_shuffle_epi32(a4, 0x4e);   // (1032)_4
+    a5 = _mm_shuffle_epi32(a5, 0x4e);   // (1032)_4
 
-    a0 = _mm_shuffle_epi8(a0, ctl6);
-    a1 = _mm_shuffle_epi8(a1, ctl6);
-    a2 = _mm_shuffle_epi8(a2, ctl7);
-    a3 = _mm_shuffle_epi8(a3, ctl7);
-    a4 = _mm_shuffle_epi8(a4, ctl8);
-    a5 = _mm_shuffle_epi8(a5, ctl8);
-    a6 = _mm_shuffle_epi8(a6, ctl9);
-    a7 = _mm_shuffle_epi8(a7, ctl9);
+    a6 = _mm_shuffle_epi32(a6, 0x1b);   // (0123)_4
+    a7 = _mm_shuffle_epi32(a7, 0x1b);   // (0123)_4
 
-    b0 = _mm_alignr_epi8(a0, a4, 8);
-    b1 = _mm_alignr_epi8(a1, a5, 8);
-    b2 = _mm_alignr_epi8(a2, a6, 8);
-    b3 = _mm_alignr_epi8(a3, a7, 8);
-    b4 = _mm_alignr_epi8(a4, a0, 8);
-    b5 = _mm_alignr_epi8(a5, a1, 8);
-    b6 = _mm_alignr_epi8(a6, a2, 8);
-    b7 = _mm_alignr_epi8(a7, a3, 8);
+    // XXX when switching to AVX2, replace blend_epi16(0xf0) -> blend_epi32(0xc) for a small performance boost
+    b0 = _mm_blend_epi16(a0, a4, 0xf0);  // (11110000)_2
+    b4 = _mm_blend_epi16(a4, a0, 0xf0);  // (11110000)_2
+    b1 = _mm_blend_epi16(a1, a5, 0xf0);  // (11110000)_2
+    b5 = _mm_blend_epi16(a5, a1, 0xf0);  // (11110000)_2
+    b2 = _mm_blend_epi16(a2, a6, 0xf0);  // (11110000)_2
+    b6 = _mm_blend_epi16(a6, a2, 0xf0);  // (11110000)_2
+    b3 = _mm_blend_epi16(a3, a7, 0xf0);  // (11110000)_2
+    b7 = _mm_blend_epi16(a7, a3, 0xf0);  // (11110000)_2
 
-    a0 = b0;
-    a1 = b1;
-    a2 = b2;
-    a3 = b3;
-    a4 = b4;
-    a5 = b5;
-    a6 = b6;
-    a7 = b7;
+    b4 = _mm_shuffle_epi32(b4, 0x4e);   // (1032)_4
+    b5 = _mm_shuffle_epi32(b5, 0x4e);   // (1032)_4
+    b6 = _mm_shuffle_epi32(b6, 0x4e);   // (1032)_4
+    b7 = _mm_shuffle_epi32(b7, 0x4e);   // (1032)_4
 
-    static const __m128i ctl10 = _mm_set_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
-
-    a0 = _mm_shuffle_epi8(a0, ctl10);
-    a1 = _mm_shuffle_epi8(a1, ctl10);
-    a2 = _mm_shuffle_epi8(a2, ctl10);
-    a3 = _mm_shuffle_epi8(a3, ctl10);
-
-    x0 = a0;
-    x1 = a1;
-    x2 = a2;
-    x3 = a3;
-    x4 = a4;
-    x5 = a5;
-    x6 = a6;
-    x7 = a7;
+    x0 = b0;
+    x1 = b1;
+    x2 = b2;
+    x3 = b3;
+    x4 = b4;
+    x5 = b5;
+    x6 = b6;
+    x7 = b7;
 }
 
 
