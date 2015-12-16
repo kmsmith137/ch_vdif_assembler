@@ -15,6 +15,7 @@ static void usage()
 	 << "    -f file_list.txt                   to run on a disk capture\n"
 	 << "    -n                                 to run on a real-time network capture\n"
 	 << "    -s                                 to run on a simulated network capture (6.4 Gbps, 60 sec)\n"
+	 << "    -S num_seconds                     to run on a simulated network capture (6.4 Gpbs, specified duration)\n"
 	 << "    -t                                 to run in \"timing mode\": reported running time will be determined by the slowest thread\n"
 	 << "    -d                                 to save stream on disk (will no-op if already running on a disk capture)\n"
 	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers\n"
@@ -156,6 +157,17 @@ int main(int argc, char **argv)
 	    if (stream)
 		usage();
 	    stream = make_file_stream(positional_arg);
+	    pos += 2;
+	    continue;
+	}
+
+	if (cs == 'S') {
+	    if (stream)
+		usage();
+	    double nsec = atof(positional_arg);
+	    cout << "simulated stream duration: " << nsec << " seconds\n";
+	    xassert(nsec > 0.0);
+	    stream = make_simulated_stream(6.4, nsec);
 	    pos += 2;
 	    continue;
 	}
