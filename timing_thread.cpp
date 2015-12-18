@@ -68,6 +68,8 @@ struct timing_thread : public thread_base
 	    stringstream ss;
 	    ss << this->name << ": chunk=" << i << "/" << nchunks << ", instantaneous_gpbs=" << instantaneous_gbps << "\n";
 	    cout << ss.str() << flush;
+
+	    nc->stream_put_chunk(chunk, timer);
 	}
 
 	nc->stream_end();
