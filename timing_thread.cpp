@@ -38,6 +38,8 @@ struct timing_thread : public thread_base
 	
 	// FIXME cut-and-paste with sim_thread here; could define helper function or common base class
 	for (int i = 0; i < nchunks; i++) {
+	    struct timeval tv0 = get_time();
+
 	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (packets_per_chunk, i);
 	    chunk->size = chunk->capacity;
 	    chunk->set_zero();
@@ -59,12 +61,13 @@ struct timing_thread : public thread_base
 		t0 += (uint64_t)((i*packets_per_chunk+j) * fpga_counts_per_packet);
 		header[5] = (uint32_t) t0;
 	    }
+
+	    double dt = time_diff(tv0, get_time());
+	    double instantaneous_gbps = assumed_gbps * packets_per_chunk / packets_per_sec / dt;
 	
 	    stringstream ss;
-	    ss << this->name << ": chunk=" << i << "/" << nchunks << "\n";
+	    ss << this->name << ": chunk=" << i << "/" << nchunks << ", instantaneous_gpbs=" << instantaneous_gbps << "\n";
 	    cout << ss.str() << flush;
-
-	    nc->stream_put_chunk(chunk, timer);
 	}
 
 	nc->stream_end();

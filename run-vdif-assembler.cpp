@@ -17,6 +17,7 @@ static void usage()
 	 << "    -s                                 to run on a simulated network capture (6.4 Gbps, 60 sec)\n"
 	 << "    -S num_seconds                     to run on a simulated network capture (6.4 Gpbs, specified duration)\n"
 	 << "    -t                                 to run in \"timing mode\": reported running time will be determined by the slowest thread\n"
+	 << "    -T num_chunks                      to run in timing mode for specified chunk count (default is 128)\n"
 	 << "    -d                                 to save stream on disk (will no-op if already running on a disk capture)\n"
 	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers\n"
 	 << "\n"
@@ -80,7 +81,7 @@ int main(int argc, char **argv)
 {
     // only used in timing thread (-t)
     static const int timing_npackets_per_chunk = 50000;
-    static const int timing_nchunks = 128;
+    int timing_nchunks = 128;   // default value
 
     bool is_timing = false;
     bool write_to_disk = false;
@@ -168,6 +169,18 @@ int main(int argc, char **argv)
 	    cout << "simulated stream duration: " << nsec << " seconds\n";
 	    xassert(nsec > 0.0);
 	    stream = make_simulated_stream(6.4, nsec);
+	    pos += 2;
+	    continue;
+	}
+
+	if (cs == 'T') {
+	    if (stream)
+		usage();
+	    timing_nchunks = atoi(positional_arg);
+	    cout << "timing chunk count: " << timing_nchunks << " seconds\n";
+	    xassert(timing_nchunks > 0);
+	    stream = make_timing_stream(timing_npackets_per_chunk, timing_nchunks);
+	    is_timing = true;
 	    pos += 2;
 	    continue;
 	}
