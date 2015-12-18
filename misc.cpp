@@ -89,16 +89,102 @@ void *thread_base::_pthread_main(void *arg)
 
 // -------------------------------------------------------------------------------------------------
 //
+// Chunk pools
+
+
+chunk_pool::chunk_pool(int nbytes_per_chunk_, bool set_zero_)
+    : nbytes_per_chunk(nbytes_per_chunk_), set_zero(set_zero_)
+{
+    xassert(nbytes_per_chunk > 0);
+    pthread_mutex_init(&mutex, NULL);
+}
+
+
+chunk_pool::~chunk_pool()
+{
+    clear();
+    pthread_mutex_destroy(&mutex);
+}
+
+
+uint8_t *chunk_pool::get_chunk()
+{
+    uint8_t *ret = NULL;
+    pthread_mutex_lock(&mutex);
+    
+    if (pointer_pool.size() > 0) {
+	ret = pointer_pool[pointer_pool.size()-1];
+	pointer_pool.pop_back();
+	pthread_mutex_unlock(&mutex);
+    }
+    else {
+	pthread_mutex_unlock(&mutex);
+    
+	if (posix_memalign(reinterpret_cast<void **> (&ret), constants::cache_line_size, nbytes_per_chunk) != 0)
+	    throw std::runtime_error("couldn't allocate memory");
+    }
+
+    xassert(ret != NULL);
+
+    if (set_zero)
+	memset(ret, 0, nbytes_per_chunk);
+
+    return ret;
+}
+
+
+void chunk_pool::put_chunk(uint8_t *buf)
+{
+    xassert(buf != NULL);
+
+    pthread_mutex_lock(&mutex);
+    pointer_pool.push_back(buf);
+    pthread_mutex_unlock(&mutex);
+}
+
+
+void chunk_pool::clear()
+{
+    vector<uint8_t *> v;
+
+    pthread_mutex_lock(&mutex);
+    pointer_pool.swap(v);
+    pthread_mutex_unlock(&mutex);
+
+    for (unsigned int i = 0; i < v.size(); i++)
+	free(v[i]);
+}
+
+
+vdif_chunk_pool::vdif_chunk_pool(int packet_count_, bool set_zero_)
+    : chunk_pool(packet_count_ * constants::packet_nbytes + 2 * vdif_chunk::pad, set_zero_),
+      packet_count(packet_count_)
+{
+    xassert(packet_count > 0);
+}
+
+
+assembled_chunk_pool::assembled_chunk_pool(int assembler_nt_)
+    : chunk_pool(assembler_nt_ * 2 * constants::chime_nfreq, true),
+      assembler_nt(assembler_nt_)
+{
+    xassert(assembler_nt > 0);
+    xassert(assembler_nt % constants::cache_line_size == 0);
+}
+
+
+// -------------------------------------------------------------------------------------------------
+//
 // vdif_chunk
 
 
-vdif_chunk::vdif_chunk(int npackets, int seq_id)
+vdif_chunk::vdif_chunk(const shared_ptr<vdif_chunk_pool> &pool_, int seq_id_)
+    : pool(pool_), seq_id(seq_id_)
 {
-    // no initialization (including memset) of buffer
-    this->buf = new uint8_t[npackets * constants::packet_nbytes];
-    this->capacity = npackets;
+    this->buf0 = pool->get_chunk();
+    this->buf = this->buf0 + pad;
+    this->capacity = pool->packet_count;
     this->size = 0;
-    this->seq_id = seq_id;
     this->is_on_disk = false;
 
     // placeholder; will eventually get set in assembler_nerve_center::stream_put_chunk() or assembler_nerve_center::trigger()
@@ -123,6 +209,9 @@ vdif_chunk::vdif_chunk(const string &filename, int seq_id)
 	// we now fall through here, instead of throwing an exception...
     }
 
+    int npackets = s.st_size / constants::packet_nbytes;
+    int nbytes_unpadded = npackets * constants::packet_nbytes;
+
     int fd = open(filename.c_str(), O_RDONLY);
 
     if (fd < 0) {
@@ -130,23 +219,23 @@ vdif_chunk::vdif_chunk(const string &filename, int seq_id)
 	throw runtime_error(strerror(errno));
     }
 
-    this->capacity = s.st_size / constants::packet_nbytes;
-    this->buf = new uint8_t[capacity * constants::packet_nbytes];
+    this->capacity = npackets;
+    this->buf0 = reinterpret_cast<uint8_t *> (malloc(nbytes_unpadded + 2*pad));
+    this->buf = buf0 + pad;
     this->size = capacity;   // in anticipation of reading the whole buffer
     this->seq_id = seq_id;
     this->is_on_disk = true;
     this->want_on_disk = false;
 
-    ssize_t pos = 0;
-    ssize_t sz = capacity * constants::packet_nbytes;
+    int pos = 0;
 
-    while (pos < sz) {
-	int ret = read(fd, &buf[pos], sz-pos);
+    while (pos < nbytes_unpadded) {
+	int ret = read(fd, &buf[pos], nbytes_unpadded - pos);
 
 	if (ret <= 0) {
 	    close(fd);
-	    delete[] this->buf;
-	    this->buf = NULL;
+	    free(this->buf0);
+	    this->buf0 = this->buf = NULL;
 	    this->capacity = this->size = 0;
 
 	    cout << filename << ": error in read(), or unexpected end-of-file: " << strerror(errno) << endl;
@@ -157,12 +246,6 @@ vdif_chunk::vdif_chunk(const string &filename, int seq_id)
     }
 
     close(fd);
-}
-
-
-void vdif_chunk::set_zero()
-{
-    memset(buf, 0, capacity * constants::packet_nbytes);
 }
 
 
@@ -196,8 +279,13 @@ void vdif_chunk::write(const string &filename)
 
 vdif_chunk::~vdif_chunk()
 {
-    delete[] this->buf;
-    this->buf = NULL;
+    if (pool)
+	pool->put_chunk(buf0);
+    else
+	free(buf0);
+	
+    this->buf0 = this->buf = NULL;
+    this->capacity = this->size = 0;
 }
 
 
@@ -206,26 +294,16 @@ vdif_chunk::~vdif_chunk()
 // assembled_chunk
 
 
-static uint8_t *chunk_alloc(int nt)
-{
-    xassert(nt > 0);
-    xassert(nt % 64 == 0);
-    
-    int nbytes = constants::chime_nfreq * 2 * nt;
-    uint8_t *ret = new uint8_t[nbytes];
-    memset(ret, 0, nbytes);
-    return ret;
-}
-
-
-assembled_chunk::assembled_chunk(int64_t t0_, int nt_)
-    : buf(chunk_alloc(nt_)), t0(t0_), nt(nt_), pcount(0)
+assembled_chunk::assembled_chunk(const shared_ptr<assembled_chunk_pool> &pool_, int64_t t0_)
+    : pool(pool_), 
+      buf(pool_->get_chunk()),
+      t0(t0_), nt(pool_->assembler_nt), pcount(0)
 { }
 
 
 assembled_chunk::~assembled_chunk()
 {
-    delete[] this->buf;
+    pool->put_chunk(const_cast<uint8_t *> (buf));
     const_cast<const uint8_t *&> (this->buf) = NULL;
 }
 

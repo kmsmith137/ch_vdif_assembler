@@ -37,6 +37,9 @@ struct network_thread : public thread_base
 	
 	// kill assembler if we throw an exception somewhere
 	assembler_killer killer(nc, "network thread threw exception");
+	
+	// the "false" in the constructor is "set_zero=false"
+	shared_ptr<vdif_chunk_pool> vpool = make_shared<vdif_chunk_pool> (packets_per_chunk, false);
 
 	struct epoll_event events[max_events];
 	struct epoll_event ev;
@@ -84,7 +87,7 @@ struct network_thread : public thread_base
 	struct timeval tv0 = get_time();
 	
 	for (;;) {
-	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (packets_per_chunk, seq_id);
+	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, seq_id);
 	    int num_events = epoll_wait(epoll_fd, events, max_events, -1);
 	    
 	    if (num_events < 0) {

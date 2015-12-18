@@ -136,7 +136,40 @@ void spawn_thread(Args... args)
 // Some core classes
 
 
+struct chunk_pool : noncopyable {
+    const int nbytes_per_chunk;
+    const bool set_zero;
+
+    pthread_mutex_t mutex;
+    std::vector<uint8_t *> pointer_pool;
+
+    uint8_t *get_chunk();
+    void put_chunk(uint8_t *p);
+    void clear();
+    
+    chunk_pool(int nbytes_per_chunk, bool set_zero);
+    ~chunk_pool();
+};
+
+
+struct vdif_chunk_pool : public chunk_pool {
+    const int packet_count;
+    vdif_chunk_pool(int packet_count, bool set_zero);
+};
+
+
+struct assembled_chunk_pool : public chunk_pool {
+    const int assembler_nt;
+    assembled_chunk_pool(int assembler_nt);
+};
+
+
 struct vdif_chunk : noncopyable {
+    static const int pad = 256;
+
+    std::shared_ptr<vdif_chunk_pool> pool;  // can be empty pointer, if memory is managed with malloc/free rather than pool
+    uint8_t *buf0;  // allocated buffer before prepadding (this should be passed to free())
+
     uint8_t *buf;
     int capacity;  // in packets
     int size;      // in packets
@@ -144,16 +177,18 @@ struct vdif_chunk : noncopyable {
     int seq_id;
     bool is_on_disk;
     bool want_on_disk;
-
-    // Warning: this constructor allocates the buffer but doesn't initialize it
-    // In both constructors, it's important that the seq_ids go 0,1,2,etc.  (See stream_put_chunk below)
-    // This constructor sets is_on_disk=false
-    vdif_chunk(int npackets, int seq_id);
+    
+    //
+    // Construct empty chunk (this constructor sets is_on_disk=false)
+    //
+    // Note: in both constructors, it's important that the seq_ids go 0,1,2,...
+    // Otherwise, the assembler may crash or deadlock!
+    //
+    vdif_chunk(const std::shared_ptr<vdif_chunk_pool> &pool, int seq_id);
 
     // Read from file (this constructor sets is_on_disk=true)
     vdif_chunk(const std::string &filename, int seq_id);
 
-    void set_zero();
     void write(const std::string &filename);
 
     ~vdif_chunk();

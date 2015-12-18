@@ -30,6 +30,9 @@ struct sim_thread : public thread_base
     {
 	static const int packets_per_chunk = 50000;
 	static const int packet_size = constants::packet_nbytes;
+
+	// the "true" in the constructor is "set_zero=true"
+	shared_ptr<vdif_chunk_pool> vpool = make_shared<vdif_chunk_pool> (packets_per_chunk, true);
 	
 	// kill assembler if we throw an exception somewhere
 	assembler_killer killer(nc, "sim thread threw exception");
@@ -57,9 +60,8 @@ struct sim_thread : public thread_base
 		t = time_diff(tv0, get_time());
 	    }
 
-	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (packets_per_chunk, i);
+	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, i);
 	    chunk->size = chunk->capacity;
-	    chunk->set_zero();
 	    
 	    uint8_t *packet0 = chunk->buf;
 	    

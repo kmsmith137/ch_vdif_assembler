@@ -50,6 +50,7 @@ struct _assembler_fragment {
 
 struct assembler_thread : public thread_base {
     shared_ptr<assembler_nerve_center> nc;
+    shared_ptr<assembled_chunk_pool> apool;
     const int assembler_nt;
 
     shared_ptr<assembled_chunk> chunk0;
@@ -73,12 +74,18 @@ struct assembler_thread : public thread_base {
 
     assembler_thread(const shared_ptr<assembler_nerve_center> &nc_)
 	: thread_base("assembler thread"),
-	  nc(nc_), assembler_nt(nc_->get_assembler_nt()),
-	  chunk_t1(-(1<<30)),   // see below for explanation of this sentinel value
-	  buf0(NULL), buf1(NULL), have_inactive_chunks(false), dropflag(false)
+	  assembler_nt(nc_->get_assembler_nt())
     {
 	xassert(assembler_nt % 64 == 0);
 	xassert(assembler_nt >= 8192);     // using less than 8K is probably a bad idea!
+
+	this->nc = nc_;
+	this->apool = make_shared<assembled_chunk_pool> (assembler_nt);
+	this->chunk_t1 = -(1<<30);   // see below for explanation of this sentinel value
+	this->buf0 = NULL;
+	this->buf1 = NULL;
+	this->have_inactive_chunks = false;
+	this->dropflag = false;
     }
 
     virtual ~assembler_thread() { }
@@ -226,7 +233,7 @@ struct assembler_thread : public thread_base {
 	    
 	    inactive_chunk0 = chunk0;
 	    chunk0 = chunk1;
-	    chunk1 = make_shared<assembled_chunk> (chunk_t1, assembler_nt);
+	    chunk1 = make_shared<assembled_chunk> (apool, chunk_t1);
 	}
 	else {
 	    xassert(packet_t1 >= 0);  // FIXME not guaranteed but extremely likely
@@ -234,8 +241,8 @@ struct assembler_thread : public thread_base {
 	    
 	    inactive_chunk0 = chunk0;
 	    inactive_chunk1 = chunk1;
-	    chunk0 = make_shared<assembled_chunk> (chunk_t1-assembler_nt, assembler_nt);
-	    chunk1 = make_shared<assembled_chunk> (chunk_t1, assembler_nt);
+	    chunk0 = make_shared<assembled_chunk> (apool, chunk_t1-assembler_nt);
+	    chunk1 = make_shared<assembled_chunk> (apool, chunk_t1);
 	}
 
 	xassert(packet_t1 >= chunk_t1);

@@ -22,13 +22,22 @@
 - Why is the assembler so much slower on my desktop than on moose?  Is the L3 cache
   becoming a bottleneck?
 
-- Systematic unit testing, including concurrency corner cases
+- assembler_nerve_center::cond_rbuf_* should be arrays of length rbuf_size.
+  (I think it's OK to keep cond_abuf_* as a scalar, right?)
+
+- Test concurrency corner cases
 
 - Can we define a single templated structure which combines the various thread-safe
   ring buffers defined in the code?  (rbuf, abuf, unit_testing_buffer)
 
 - We may eventually want a little more asynchronous functionality, so that the
   assembler can run as a "remote-controlled" daemon
+
+- 256-bit kernels
+
+- To avoid the page faulting cost of glibc malloc/free, I'm currently using some
+  homegrown memory management which never returns buffers to the operating system
+  until the managing thread exits.  Is there a better solution?
 
 - Cleanup:
     - Properly destroy mutexes/conditionals, and joining threads

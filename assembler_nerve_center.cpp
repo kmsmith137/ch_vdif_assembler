@@ -87,7 +87,7 @@ assembler_nerve_center::assembler_nerve_center(bool write_to_disk, int rbuf_size
     // Reasonable ranges?
     xassert(assembler_nt >= 8192);
     xassert(assembler_nt <= 262144);
-    xassert(assembler_nt % 64 == 0);   // cache, simd alignment
+    xassert(assembler_nt % constants::cache_line_size == 0);
     xassert(rbuf_size >= constants::num_disks);
     xassert(rbuf_size <= 80);  // 20 GB, 25 sec, would like to increase but moose would need more memory
     xassert(abuf_size >= 2);
@@ -125,7 +125,7 @@ assembler_nerve_center::assembler_nerve_center(bool write_to_disk, int rbuf_size
 
     for (int ithread = 0; ithread < constants::num_disks; ithread++)
 	rbuf_idisk[ithread] = ithread;
-    
+
     abuf.resize(abuf_size);
     abuf_ix = 0;
 

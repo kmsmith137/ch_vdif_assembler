@@ -35,14 +35,16 @@ struct timing_thread : public thread_base
 	
 	// kill assembler if we throw an exception somewhere
 	assembler_killer killer(nc, "timing thread threw exception");
+
+	// the "true" in the constructor is "set_zero=true"
+	shared_ptr<vdif_chunk_pool> vpool = make_shared<vdif_chunk_pool> (packets_per_chunk, true);
 	
 	// FIXME cut-and-paste with sim_thread here; could define helper function or common base class
 	for (int i = 0; i < nchunks; i++) {
 	    struct timeval tv0 = get_time();
 
-	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (packets_per_chunk, i);
+	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, i);
 	    chunk->size = chunk->capacity;
-	    chunk->set_zero();
 	    
 	    uint8_t *packet0 = chunk->buf;
 

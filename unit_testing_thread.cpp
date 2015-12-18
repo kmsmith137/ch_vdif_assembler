@@ -145,15 +145,18 @@ struct unit_test_stream_thread : public thread_base
 	// fpga counts per packet
 	const double dt_dpacket = 625./256.;
 
+	// memory pools
+	shared_ptr<vdif_chunk_pool> vpool = make_shared<vdif_chunk_pool> (packets_per_chunk, true);   // set_zero=true
+	shared_ptr<assembled_chunk_pool> apool = make_shared<assembled_chunk_pool> (asm_nt);
+
 	// reference assembler state
 	uint64_t asm_t0 = tstart;
-	shared_ptr<assembled_chunk> asm_chunk0 = make_shared<assembled_chunk> (asm_t0, asm_nt);
-	shared_ptr<assembled_chunk> asm_chunk1 = make_shared<assembled_chunk> (asm_t0 + asm_nt, asm_nt);
+	shared_ptr<assembled_chunk> asm_chunk0 = make_shared<assembled_chunk> (apool, asm_t0);
+	shared_ptr<assembled_chunk> asm_chunk1 = make_shared<assembled_chunk> (apool, asm_t0 + asm_nt);
 
 	for (int ichunk = 0; ichunk < nchunks; ichunk++) {
-	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (packets_per_chunk, ichunk);
+	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, ichunk);
 	    chunk->size = chunk->capacity;
-	    chunk->set_zero();
 
 	    uint8_t *packet0 = chunk->buf;
 	    
@@ -182,7 +185,7 @@ struct unit_test_stream_thread : public thread_base
 		    if (tpacket + i >= asm_t0 + 2*asm_nt) {
 			ubuf->put_chunk(asm_chunk0);
 			asm_chunk0 = asm_chunk1;
-			asm_chunk1 = make_shared<assembled_chunk> (asm_t0 + 2*asm_nt, asm_nt);
+			asm_chunk1 = make_shared<assembled_chunk> (apool, asm_t0 + 2*asm_nt);
 			asm_t0 += asm_nt;
 		    }
 

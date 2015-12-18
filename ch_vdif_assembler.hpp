@@ -114,6 +114,7 @@ namespace constants {
     static const int num_disks = 10;
     static const int default_abuf_size = 4;
     static const int default_assembler_nt = 65536;
+    static const int cache_line_size = 64;
 };
 
 
@@ -146,6 +147,7 @@ struct noncopyable
 struct vdif_stream;
 struct vdif_processor;
 struct assembled_chunk;
+struct assembled_chunk_pool;
 struct assembler_killer;
 struct assembler_nerve_center;
 
@@ -343,6 +345,8 @@ std::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_
 
 
 struct assembled_chunk : noncopyable {
+    std::shared_ptr<assembled_chunk_pool> pool;
+
     //
     // Offset-encoded raw data; array of shape (constants::chime_nfreq, 2, nt) 
     // This data is read simultaneously by multiple threads, so don't modify it!
@@ -356,7 +360,7 @@ struct assembled_chunk : noncopyable {
     // Used internally by the assembler, modifying this field will probably crash or deadlock!
     int pcount;
 
-    assembled_chunk(int64_t t0, int nt);
+    assembled_chunk(const std::shared_ptr<assembled_chunk_pool> &pool, int64_t t0);
     ~assembled_chunk();
 
     // These methods are a little slow and intended for unit testing
