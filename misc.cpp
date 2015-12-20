@@ -155,6 +155,8 @@ vdif_chunk::vdif_chunk(const string &filename, int seq_id)
 	
 	pos += ret;
     }
+
+    close(fd);
 }
 
 
