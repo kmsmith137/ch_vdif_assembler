@@ -64,14 +64,14 @@ struct timing_thread : public thread_base
 		header[5] = (uint32_t) t0;
 	    }
 
+	    nc->stream_put_chunk(chunk, timer);
+
 	    double dt = time_diff(tv0, get_time());
 	    double instantaneous_gbps = assumed_gbps * packets_per_chunk / packets_per_sec / dt;
 	
 	    stringstream ss;
 	    ss << this->name << ": chunk=" << i << "/" << nchunks << ", instantaneous_gpbs=" << instantaneous_gbps << "\n";
 	    cout << ss.str() << flush;
-
-	    nc->stream_put_chunk(chunk, timer);
 	}
 
 	nc->stream_end();
