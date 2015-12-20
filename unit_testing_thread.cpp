@@ -1,3 +1,7 @@
+//
+// A stream/processor pair which unit tests the assembler by comparing with a slow reference implementation.
+//
+
 #include <cstring>
 #include "ch_vdif_assembler_internals.hpp"
 
