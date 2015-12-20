@@ -16,13 +16,11 @@ import ReadBeamform
 
 
 if len(sys.argv) != 2:
-    print >>sys.stderr, 'Usage: compare-to-liam-code.py <acq_name>'
-    print >>sys.stderr, '    acq_name can be a complete acquisition name, e.g. 20150910T041537Z_chime_beamformed'
-    print >>sys.stderr, '    or a uniquely determining substring, e.g. 41537'
+    print >>sys.stderr, 'Usage: compare-to-liam-code.py <filename_list.txt>'
+    print >>sys.stderr, 'You may find the script show-moose-acqusitions.py useful for making file lists'
     sys.exit(2)
 
-acq_name = sys.argv[1]
-filename_list = ch_vdif_assembler.moose_filename_list(acq_name)
+filename_list = [ f.strip() for f in open(sys.argv[1]) ]
 
 def br_read_file(filename):
     """
