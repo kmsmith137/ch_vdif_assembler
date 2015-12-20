@@ -362,6 +362,37 @@ struct processor_handle : noncopyable {
 };
 
 
+// -------------------------------------------------------------------------------------------------
+//
+// A stream/processor pair which unit tests the assembler by comparing with a slow reference implementation.
+
+
+// Single-producer, single-consumer thread-safe ring buffer for assembled_chunks.
+struct unit_test_buffer : noncopyable {
+    mutable pthread_mutex_t lock;
+    mutable pthread_cond_t cond_produced;
+
+    int capacity;
+    int ix0;    // consumer index
+    int ix1;    // producer index
+    std::vector<std::shared_ptr<assembled_chunk> > buf;
+    bool producer_exit_flag;
+
+    unit_test_buffer(int capacity=16);  // OK to overallocate here
+    ~unit_test_buffer();
+
+    int get_size() const;
+    std::shared_ptr<assembled_chunk> get_chunk();  // returns empty pointer if producer has exited
+
+    void put_chunk(const std::shared_ptr<assembled_chunk> &chunk);
+    void producer_exit();
+};
+
+
+extern std::shared_ptr<vdif_stream> make_unit_test_stream(const std::shared_ptr<unit_test_buffer> &ubuf, int nchunks, int assembler_nt=constants::default_assembler_nt);
+extern std::shared_ptr<vdif_processor> make_unit_test_processor(const std::shared_ptr<unit_test_buffer> &ubuf);
+
+
 }  // namespace ch_vdif_assembler
 
 

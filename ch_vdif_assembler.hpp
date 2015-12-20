@@ -112,6 +112,8 @@ namespace constants {
     static const int timestamps_per_frame = 1 << 23;    // cadence of noise source
     static const int packet_nbytes = 5032;              // = header_nbytes + 8 * timestamps_per_packet
     static const int num_disks = 10;
+    static const int default_abuf_size = 4;
+    static const int default_assembler_nt = 65536;
 };
 
 
@@ -181,7 +183,11 @@ struct vdif_assembler
     // the assembler will ring-buffer the data, and write to disk if a processor
     // calls trigger().
     //
-    vdif_assembler(bool write_to_disk=false, int rbuf_size=constants::num_disks, int abuf_size=4, int assembler_nt=65536);
+    vdif_assembler(bool write_to_disk=false, 
+		   int rbuf_size=constants::num_disks, 
+		   int abuf_size=constants::default_abuf_size, 
+		   int assembler_nt=constants::default_assembler_nt);
+
     ~vdif_assembler();
 
     // Each call to register_processor() spawns one processing thread.
@@ -352,6 +358,10 @@ struct assembled_chunk : noncopyable {
 
     assembled_chunk(int64_t t0, int nt);
     ~assembled_chunk();
+
+    // These methods are a little slow and intended for unit testing
+    bool is_zero() const;
+    bool is_equal(const assembled_chunk &a) const;
     
     //
     // Should probably never be used in "production" code (an assembly language kernel will

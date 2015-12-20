@@ -18,6 +18,7 @@ static void usage()
 	 << "    -S num_seconds                     to run on a simulated network capture (6.4 Gpbs, specified duration)\n"
 	 << "    -t                                 to run in \"timing mode\": reported running time will be determined by the slowest thread\n"
 	 << "    -T num_chunks                      to run in timing mode for specified chunk count (default is 128)\n"
+	 << "    -u                                 to run a unit test stream/processor pair which compares the fast assembler to a reference implementation\n"
 	 << "    -d                                 to save stream on disk (will no-op if already running on a disk capture)\n"
 	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers\n"
 	 << "\n"
@@ -135,6 +136,16 @@ int main(int argc, char **argv)
 		usage();
 	    stream = make_timing_stream(timing_npackets_per_chunk, timing_nchunks);
 	    is_timing = true;
+	    pos++;
+	    continue;
+	}
+
+	if (cs == 'u') {
+	    if (stream)
+		usage();
+	    shared_ptr<unit_test_buffer> ubuf = make_shared<unit_test_buffer>();
+	    stream = make_unit_test_stream(ubuf, 100);
+	    processors.push_back(make_unit_test_processor(ubuf));
 	    pos++;
 	    continue;
 	}

@@ -228,6 +228,33 @@ assembled_chunk::~assembled_chunk()
 }
 
 
+bool assembled_chunk::is_zero() const
+{
+    // FIXME could make an assembly language kernel for this, but it's 
+    // currently only used for non speed critical unit testing
+
+    const int64_t *p64 = reinterpret_cast<const int64_t *> (buf);
+    int n64 = (constants::chime_nfreq * 2 * nt) / 8;
+    bool ret = true;
+
+    // optimize for case where 'true' is returned
+    for (int i = 0; i < n64; i++)
+	ret = p64[i] ? false : ret;  // compiler emits conditional move, not branch
+
+    return ret;
+}
+
+
+bool assembled_chunk::is_equal(const assembled_chunk &a) const
+{
+    xassert(this->t0 == a.t0);
+    xassert(this->nt == a.nt);
+
+    int nbytes = constants::chime_nfreq * 2 * nt;
+    return memcmp(this->buf, a.buf, nbytes) == 0;
+}
+
+
 // -------------------------------------------------------------------------------------------------
 //
 // vdif_assembler

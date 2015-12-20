@@ -17,7 +17,7 @@ PYMODULES=ch_vdif_assembler.py
 SCRIPTS=show-moose-acquisitions.py index_vdif_waterfalls.py
 TESTBINFILES=test-timestamp-unwrapper test-kernels time-kernels peek-at-kernels
 
-OFILES=assembler_nerve_center.o assembler_thread.o disk_reader_thread.o disk_writer_thread.o misc.o network_thread.o processing_thread.o rfi_histogrammer.o sim_thread.o timing_thread.o waterfall_plotter.o
+OFILES=assembler_nerve_center.o assembler_thread.o disk_reader_thread.o disk_writer_thread.o misc.o network_thread.o processing_thread.o rfi_histogrammer.o sim_thread.o timing_thread.o unit_testing_thread.o waterfall_plotter.o
 
 
 all: $(BINFILES) $(LIBFILES) $(LIBCYTHON) $(TESTBINFILES)
