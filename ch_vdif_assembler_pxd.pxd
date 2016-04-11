@@ -1,4 +1,4 @@
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
 
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -24,6 +24,7 @@ cdef extern from "ch_vdif_assembler_cython.hpp" namespace "ch_vdif_assembler":
         int nt
 
         void fill_efield(float complex *efield, int32_t *mask) except +
+        uint8_t* get_buf() except +
 
 
     cdef cppclass cython_assembler:

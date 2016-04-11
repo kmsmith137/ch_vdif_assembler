@@ -1,9 +1,13 @@
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
+from libc.stdlib cimport free, malloc
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
 import numpy as np
 cimport numpy as np
+
+# Oddly, things compile without this, but segfaults. -KM
+np.import_array()    # Exposes the numpy c-api.
 
 cimport ch_vdif_assembler_pxd
 
@@ -94,6 +98,48 @@ cdef class assembled_chunk:
 
         self.p[0].fill_efield(&efield[0,0,0], &mask[0,0,0])
         return (t0, nt, efield, mask)
+
+    def get_byte_data(self):
+        if self.p == NULL:
+            return None
+
+        t0 = self.p[0].t0
+        nt = self.p[0].nt
+
+        shape = (chime_nfreq, 2, nt)
+        # Get all the dimensions in the right format.
+        cdef int nd = len(shape)
+        # Very important to use this type.
+        cdef np.npy_intp *shape_c = <np.npy_intp *> malloc(nd * sizeof(np.npy_intp))
+        cdef int64_t size = 1
+        for ii, s in enumerate(shape):
+            shape_c[ii] = s
+            size *= s
+
+        # XXX I'm note sure how the memory for self.p[0].buf is handled. I'm
+        # worried that it is freed when self.p[0] goes out of scope, which may be
+        # before efield goes out of scope. The fix is to store a reference of
+        # self.p[0] in efield. This is done below, but doesn't seem to be
+        # nessisary. -KM
+        cdef np.ndarray[np.uint8_t,ndim=3,mode='c'] efield
+        cdef uint8_t *buf
+        buf = self.p[0].get_buf()
+        #buf = <uint8_t *> malloc(size * sizeof(uint8_t))
+        efield = np.PyArray_SimpleNewFromData(nd, shape_c, np.NPY_UINT8, <void *>buf)
+        efield.flags.writeable = False
+
+        # Store reference to self to keep it in scope and from freeing
+        # memory.
+        # This is the wronge place for class definition if this ends up being
+        # needed.
+        #class pyobj_array(np.ndarray):
+        #    pass
+        #efield = efield.view(pyobj_array)
+        #pyobj_array._ref_to_memory = self
+
+        free(shape_c)
+        return (t0, nt, efield)
+
 
 
 ##############################################  Assembler  #########################################

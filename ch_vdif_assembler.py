@@ -48,7 +48,7 @@ class constants:
     num_disks = ch_vdif_assembler_cython.num_disks                          # 10 (moose)
 
 
-class assembler:
+class assembler(object):
     def __init__(self, write_to_disk=False, rbuf_size=constants.num_disks, abuf_size=4, assembler_nt=65536):
         self._assembler = ch_vdif_assembler_cython.assembler(write_to_disk, rbuf_size, abuf_size, assembler_nt)
         self.python_processor = None
@@ -80,7 +80,11 @@ class assembler:
                 chunk = self._assembler.get_next_python_chunk()
                 if chunk is None:
                     break
-                (t0, nt, efield, mask) = chunk.get_data()
+                if self.python_processor.byte_data:
+                    t0, nt, efield = chunk.get_byte_data()
+                    mask = None
+                else:
+                    (t0, nt, efield, mask) = chunk.get_data()
                 self.python_processor.process_chunk(t0, nt, efield, mask)
 
             self.python_processor.finalize()
@@ -142,7 +146,7 @@ def cpp_waterfall_plotter(outdir, is_critical=False):
     return ch_vdif_assembler_cython.cpp_waterfall_plotter(outdir, is_critical)
 
 
-class processor:
+class processor(object):
     """
     To define a python processor, you subclass this base class.
 
@@ -161,14 +165,22 @@ class processor:
     the middle index is polarziation.  Missing data is represented by (0+0j).  The 'mask' arg
     is a shape (nfreq,2,nt) integer array which is 0 for missing data, and 1 for non-missing.
 
-     WARNING 2: Handling missing data is an important aspect of the vdif_processor since it 
-     happens all the time.  If a GPU correlator node is down, which is a frequent occurrence, 
-     then some frequencies will be "all missing".  There are also routine packet loss events 
-     on second-timescales which result in some high-speed samples being flagged as missing data.
-     """
+    For subclasses with attribute `byte_data = True`, 'efield' is a shape
+    (nfreq,2,nt) byte array, as in the C++ versions. 'mask' is None.
+
+    WARNING 2: Handling missing data is an important aspect of the vdif_processor since it 
+    happens all the time.  If a GPU correlator node is down, which is a frequent occurrence, 
+    then some frequencies will be "all missing".  There are also routine packet loss events 
+    on second-timescales which result in some high-speed samples being flagged as missing data.
+    """
+
+    byte_data = False
 
     def process_chunk(self, t0, nt, efield, mask):
-        print 'process_chunk called! t0=%s nt=%s efield (%s,%s) mask (%s,%s)' % (t0, nt, efield.dtype, efield.shape, mask.dtype, mask.shape)
+        if mask is None:
+            print 'process_chunk called! t0=%s nt=%s efield (%s,%s)' % (t0, nt, efield.dtype, efield.shape)
+        else:
+            print 'process_chunk called! t0=%s nt=%s efield (%s,%s) mask (%s,%s)' % (t0, nt, efield.dtype, efield.shape, mask.dtype, mask.shape)
 
     def finalize(self):
         pass
@@ -181,7 +193,7 @@ class processor:
 # See also the script show-moose-acquisitions.py
 
 
-class moose_inventory:
+class moose_inventory(object):
     def __init__(self):
         self.topdirs = [ ('/drives/E/%d' % i) for i in xrange(10) ]
         self.subdirs = set()
