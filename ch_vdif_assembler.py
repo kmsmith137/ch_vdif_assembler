@@ -51,7 +51,7 @@ class constants:
 class assembler(object):
     def __init__(self, write_to_disk=False, rbuf_size=constants.num_disks, abuf_size=4, assembler_nt=65536):
         self._assembler = ch_vdif_assembler_cython.assembler(write_to_disk, rbuf_size, abuf_size, assembler_nt)
-        self.python_processor = None
+        self.python_processors = []
 
 
     def register_processor(self, p):
@@ -59,35 +59,42 @@ class assembler(object):
             self._assembler.register_cpp_processor(p)   # register C++ processor (this actually spawns a processing thread)
         elif not isinstance(p, processor):
             raise RuntimeError('Argument to assembler.register_processor() must be either an object of class ch_vdif_assembler.processor, or a C++ processor (e.g. returned by make_waterfall_plotter)')
-        elif self.python_processor is not None:
-            raise RuntimeError('Currently, ch_vdif_assembler only allows registering one python processor (but an arbitrary number of C++ processors)')
-        else:
-            self.python_processor = p 
+        self.python_processors.append(p)
 
 
     def run(self, stream):
-        if self.python_processor is None:
+        if not self.python_processors:
             self._assembler.start_async(stream)
             self._assembler.wait_until_end()
             return
 
         self._assembler.register_python_processor()
 
+        processors_byte_data = [p.byte_data for p in self.python_processors]
+        need_byte_data = True in processors_byte_data
+        need_complex_data = False in processors_byte_data
+
         try:
             self._assembler.start_async(stream)
-        
+
             while True:
                 chunk = self._assembler.get_next_python_chunk()
                 if chunk is None:
                     break
-                if self.python_processor.byte_data:
-                    t0, nt, efield = chunk.get_byte_data()
-                    mask = None
-                else:
-                    (t0, nt, efield, mask) = chunk.get_data()
-                self.python_processor.process_chunk(t0, nt, efield, mask)
+                if need_byte_data:
+                    byte_data = chunk.get_byte_data()
+                if need_complex_data:
+                    complex_data = chunk.get_data()
+                for p in self.python_processors:
+                    if p.byte_data:
+                        t0, nt, efield = byte_data
+                        mask = None
+                    else:
+                        t0, nt, efield, mask = complex_data
+                    p.process_chunk(t0, nt, efield, mask)
 
-            self.python_processor.finalize()
+            for p in self.python_processors:
+                p.finalize()
 
         finally:
             self._assembler.unregister_python_processor()
