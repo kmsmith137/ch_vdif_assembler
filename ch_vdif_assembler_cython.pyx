@@ -130,8 +130,8 @@ cdef class assembled_chunk:
 
         # Store reference to self to keep it in scope and from freeing
         # memory.
-        # This is the wronge place for class definition if this ends up being
-        # needed.
+        # This is the wrong place for class definition if this ends up being
+        # needed (should be top level).
         #class pyobj_array(np.ndarray):
         #    pass
         #efield = efield.view(pyobj_array)

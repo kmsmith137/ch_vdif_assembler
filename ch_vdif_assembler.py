@@ -169,7 +169,7 @@ class processor(object):
     interruption in data stream, then a timestamp gap will appear.
 
     The 'efield' arg is a shape (nfreq,2,nt) complex array with electric field values, where
-    the middle index is polarziation.  Missing data is represented by (0+0j).  The 'mask' arg
+    the middle index is polarization.  Missing data is represented by (0+0j).  The 'mask' arg
     is a shape (nfreq,2,nt) integer array which is 0 for missing data, and 1 for non-missing.
 
     For subclasses with attribute `byte_data = True`, 'efield' is a shape
