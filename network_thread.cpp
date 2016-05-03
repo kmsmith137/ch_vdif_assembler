@@ -85,9 +85,11 @@ struct network_thread : public thread_base
 
 	int seq_id = 0;
 	struct timeval tv0 = get_time();
+
+	shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, seq_id);
+	cout << "network thread: start\n";
 	
 	for (;;) {
-	    shared_ptr<vdif_chunk> chunk = make_shared<vdif_chunk> (vpool, seq_id);
 	    int num_events = epoll_wait(epoll_fd, events, max_events, -1);
 	    
 	    if (num_events < 0) {
@@ -101,7 +103,7 @@ struct network_thread : public thread_base
 		
 		uint8_t *buf = chunk->buf + chunk->size * packet_size;
 		ssize_t bytes_read = read(sock_fd, buf, packet_size);
-	    
+		
 		// FIXME silently drop?
 		if (bytes_read != packet_size)
 		    continue;
@@ -112,12 +114,14 @@ struct network_thread : public thread_base
 		
 		// Last packet in chunk received
 		struct timeval tv1 = get_time();
-		double gbps = 8. * packet_size * chunk->capacity / time_diff(tv0,tv1);
+		double gbps = 8.0e-9 * packet_size * chunk->capacity / time_diff(tv0,tv1);
 		cout << (to_string(gbps) + " Gbps\n") << flush;
+
 		nc->stream_put_chunk(chunk, timer);
-		
 		tv0 = tv1;
 		seq_id++;
+
+		chunk = make_shared<vdif_chunk> (vpool, seq_id);		
 	    }
 	}
 
