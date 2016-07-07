@@ -533,6 +533,32 @@ void xmkdir(const string &dirname)
 }
 
 
+bool is_empty_dir(const string &dirname)
+{
+    DIR *dir = opendir(dirname.c_str());
+    if (!dir)
+	throw runtime_error(dirname + ": opendir() failed: " + strerror(errno));
+
+    ssize_t name_max = pathconf(dirname.c_str(), _PC_NAME_MAX);
+    name_max = min(name_max, (ssize_t)4096);
+
+    vector<char> buf(sizeof(struct dirent) + name_max + 1);
+    struct dirent *entry = reinterpret_cast<struct dirent *> (&buf[0]);
+    
+    struct dirent *result = nullptr;
+
+    for (;;) {
+	int err = readdir_r(dir, entry, &result);	
+	if (err)
+	    throw runtime_error(dirname + ": readdir_r() failed");
+	if (!result)
+	    return true;
+	if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, ".."))
+	    return false;
+    }
+}
+
+
 string make_dataset_name()
 {
     char data_time[64];

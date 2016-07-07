@@ -20,7 +20,7 @@
 //      software may change soon, but for now there are some flags in the
 //      assembler which may help.
 //
-// To use this libarary, you:
+// To use this library, you:
 //
 //   - Construct an object of type vdif_assembler, which implements some
 //     generic logic for handling the above nuisance issues.
@@ -153,6 +153,8 @@ struct assembler_nerve_center;
 
 // Creates directory, but doesn't throw an exception if it already exists
 extern void xmkdir(const std::string &dirname);
+
+extern bool is_empty_dir(const std::string &dirname);
 
 template<typename T>
 inline std::string to_string(const T &x)
