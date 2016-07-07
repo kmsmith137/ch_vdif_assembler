@@ -9,6 +9,30 @@
 
 include Makefile.local
 
+ifndef CPP
+$(error Fatal: Makefile.local must define CPP variable)
+endif
+
+ifndef LIBDIR
+$(error Fatal: Makefile.local must define LIBDIR variable)
+endif
+
+ifndef INCDIR
+$(error Fatal: Makefile.local must define INCDIR variable)
+endif
+
+ifndef BINDIR
+$(error Fatal: Makefile.local must define BINDIR variable)
+endif
+
+ifndef PYDIR
+$(error Fatal: Makefile.local must define PYDIR variable)
+endif
+
+
+####################################################################################################
+
+
 INCFILES=ch_vdif_assembler.hpp ch_vdif_assembler_internals.hpp ch_vdif_assembler_kernels.hpp
 BINFILES=run-vdif-assembler
 LIBFILES=libch_vdif_assembler.so
@@ -55,6 +79,7 @@ test: $(TESTBINFILES)
 	for f in $(TESTBINFILES); do ./$$f; done
 
 install: $(INCFILES) $(BINFILES) $(LIBFILES) $(LIBCYTHON)
+	mkdir -p $(INCDIR) $(LIBDIR) $(BINDIR) $(PYDIR)
 	cp -f $(INCFILES) $(INCDIR)/
 	cp -f $(LIBFILES) $(LIBDIR)/
 	cp -f $(BINFILES) $(SCRIPTS) $(BINDIR)/
