@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <cstring>
 
 #include "ch_vdif_assembler_internals.hpp"
