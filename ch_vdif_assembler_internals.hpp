@@ -23,6 +23,11 @@ namespace ch_vdif_assembler {
 //
 // Miscellaneous helper routines
 
+inline bool is_power_of_two(int n)
+{
+    xassert(n >= 1);
+    return (n & (n-1)) == 0;
+}
 
 inline double time_diff(const struct timeval &tv1, const struct timeval &tv2)
 {
