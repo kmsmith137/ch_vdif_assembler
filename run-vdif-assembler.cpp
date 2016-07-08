@@ -9,6 +9,7 @@ static void usage()
 {
     cerr << "Usage: run-vdif-assembler [FLAGS]\n"
 	 << "where FLAGS include the following\n"
+	 << "    -i acqdir                          to save intensity data in hdf5 format (e.g. for FRB search)\n"
 	 << "    -w waterfall_plot_outdir           to make waterfall plots\n"
 	 << "    -r rfi_histogram_outfile.hdf5      to make rfi histograms\n"
 	 << "    -R rfi_histogram_outfile.hdf5      to make rfi histograms with a reference implementation\n"
@@ -88,6 +89,7 @@ int main(int argc, char **argv)
     bool write_to_disk = false;
     bool mischief_flag = false;
     shared_ptr<vdif_stream> stream;
+    shared_ptr<vdif_processor> intensity_beam;
     shared_ptr<vdif_processor> waterfall_plotter;
     shared_ptr<vdif_processor> rfi_histogrammer;
     vector<shared_ptr<vdif_processor> > processors;
@@ -164,6 +166,15 @@ int main(int argc, char **argv)
 	    usage();
 
 	const char *positional_arg = argv[pos+1];
+
+	if (cs == 'i') {
+	    if (intensity_beam)
+		usage();
+	    intensity_beam = make_intensity_beam(positional_arg);
+	    processors.push_back(intensity_beam);
+	    pos += 2;
+	    continue;
+	}
 
 	if (cs == 'f') {
 	    if (stream)
