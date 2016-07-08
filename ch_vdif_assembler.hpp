@@ -355,6 +355,9 @@ struct assembled_chunk : noncopyable {
     // Offset-encoded raw data; array of shape (constants::chime_nfreq, 2, nt) 
     // This data is read simultaneously by multiple threads, so don't modify it!
     //
+    // "Invalid" entries, e.g. data which never arrived due to dead correlator
+    // nodes or dropped packets, are represented by (uint8_t)0.
+    //
     const uint8_t *const buf;
 
     // Timestamp range
@@ -431,6 +434,7 @@ struct assembled_chunk : noncopyable {
 	    }
 	}
     }
+
     //
     // This kernel fills two shape-(nfreq,2,nt) arrays:
     //   vis: real auto correlations, with missing data represented by zeros
@@ -488,6 +492,9 @@ struct downsampled_intensity {
     //    weights_buf       shape (constants::chime_nfreq, 2, curr_chunk_nt)
     //
     void process_chunk(const std::shared_ptr<assembled_chunk> &a);
+    
+    // A slow reference version of process_chunk(), only used for testing
+    void process_chunk_reference(const std::shared_ptr<assembled_chunk> &a)
 };
 
 
