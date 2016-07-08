@@ -84,7 +84,7 @@ void downsampled_intensity::process_chunk(const shared_ptr<assembled_chunk> &a)
 	throw runtime_error("downsampled_intensity: internal error: assembled_chunks are overlapping or have non-monotonic timestamps");
 
     this->curr_chunk_nt = nt_chunk_lores;
-    this->curr_chunk_it0 = t0_chunk_lores;
+    this->curr_chunk_t0 = t0_chunk_lores;
 
     if (nt_alloc < nt_chunk_lores) {
 	nt_alloc = nt_chunk_lores;
@@ -178,6 +178,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 	ss << acqdir << "/" << setfill('0') << setw(8) << fileid << ".h5";
 	
 	string filename = ss.str();
+	int nfreq = constants::chime_nfreq;
 	vector<string> pol = { "XX", "YY" };
 	double freq0_MHz = 800.0;
 	double freq1_MHz = 400.0;
@@ -189,7 +190,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 	this->curr_ofile = make_unique<ch_frb_io::intensity_hdf5_ofile> (filename, nfreq, pol, freq0_MHz, freq1_MHz, dt_sample, ipos0, time0, bitshuffle);
     }
 
-    curr_ofile->append_chunk(ds_int.curr_chunk_nt, intensityp, weightsp, ds_int.curr_chunk_t0);
+    curr_ofile->append_chunk(ds_int.curr_chunk_nt, &ds_int.intensity_buf[0], &ds_int.weights_buf[0], ds_int.curr_chunk_t0);
 
     if (curr_ofile->curr_nt >= nt_maxfile)
 	this->curr_ofile = unique_ptr<ch_frb_io::intensity_hdf5_ofile> ();  // emptying this pointer flushes and writes file
