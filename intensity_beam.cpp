@@ -96,15 +96,12 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 
     if (nt_alloc < nt_chunk_lores) {
 	nt_alloc = nt_chunk_lores;
-	intensity_buf.resize(nfreq * nt_alloc);
-	weights_buf.resize(nfreq * nt_alloc);
+	intensity_buf.resize(nfreq * 2 * nt_alloc);
+	weights_buf.resize(nfreq * 2 * nt_alloc);
     }
     
     float *intensityp = &intensity_buf[0];
-    memset(intensityp, 0, nfreq * nt_chunk_lores * sizeof(float));
-
     float *weightsp = &weights_buf[0];
-    memset(weightsp, 0, nfreq * nt_chunk_lores * sizeof(float));
     
     // assumed in loop below (sum16_auto_correlations)
     static_assert(nt_downsample % 16 == 0, "intensity_beam::nt_downsample not divisible by 16");
@@ -112,7 +109,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
     for (int ifreq = 0; ifreq < nfreq; ifreq++) {
 	for (int ipol = 0; ipol < 2; ipol++) {
 	    // pointer to time series at given (ifreq, ipol)
-	    const uint8_t *p = a->buf + (2*ifreq+1)*nt_chunk_hires;
+	    const uint8_t *p = a->buf + (2*ifreq+ipol)*nt_chunk_hires;
 
 	    // loop over lores time samples
 	    for (int it = 0; it < nt_chunk_lores; it++) {
@@ -127,15 +124,11 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 		    acc_count += count;
 		}
 
-		intensityp[ifreq*nt_chunk_lores + it] += (float)acc_sum;
-		weightsp[ifreq*nt_chunk_lores + it] += (float)acc_count;
+		int i = (2*ifreq+ipol)*nt_chunk_lores + it;
+		intensityp[i] = (float)acc_sum / (float)max(acc_count,1);   // max() avoids divide-by-zero
+		weightsp[i] = (float)acc_count / (float)(2*nt_downsample);  // normalize to max weight 1
 	    }
 	}
-    }
-
-    for (int i = 0; i < nfreq*nt_chunk_lores; i++) {
-	intensityp[i] /= max(weightsp[i], (float)1.0);  // convert weight*intensity -> intensity (avoiding divide-by-zero)
-	weightsp[i] /= (2*nt_downsample);               // normalize to max weight 1
     }
 
     curr_ofile->append_chunk(nt_chunk_lores, intensityp, weightsp, a->t0);
