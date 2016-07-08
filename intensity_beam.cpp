@@ -69,7 +69,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
     }
 
     if (!curr_ofile) {
-	int64_t fileid = (a->t0 - first_timestamp) / 1024;
+	int64_t fileid = (a->t0 - first_timestamp) / 400000;
 	if ((fileid < 0) || (fileid > 99999999))
 	    throw runtime_error("intensity_beam: internal error: bad timestamp");
 	if (fileid <= last_fileid)
@@ -79,7 +79,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 	// of the form NNNNNNNN.h5, where N=[0,9].
 
 	stringstream ss;
-	ss << acqdir << "/" << setfill('0') << setw(8) << fileid << ".h5'";
+	ss << acqdir << "/" << setfill('0') << setw(8) << fileid << ".h5";
 	
 	string filename = ss.str();
 	vector<string> pol = { "XX", "YY" };
@@ -138,7 +138,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 	weightsp[i] /= (2*nt_downsample);               // normalize to max weight 1
     }
 
-    curr_ofile->append_chunk(a->nt, intensityp, weightsp, a->t0);
+    curr_ofile->append_chunk(nt_chunk_lores, intensityp, weightsp, a->t0);
 
     if (curr_ofile->curr_nt >= nt_maxfile)
 	this->curr_ofile = unique_ptr<ch_frb_io::intensity_hdf5_ofile> ();  // emptying this pointer flushes and writes file
