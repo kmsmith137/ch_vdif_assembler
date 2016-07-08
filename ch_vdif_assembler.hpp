@@ -459,6 +459,38 @@ struct assembled_chunk : noncopyable {
 };
 
 
+// -------------------------------------------------------------------------------------------------
+//
+// A helper class for vdif_processors which process intensity data (i.e. squared downsampled baseband)
+// instead of baseband data.
+
+
+struct downsampled_intensity {
+    const int nt_downsample;  // downsampling factor between baseband and intensity
+    const double dt_sample;   // downsampled sample length, int seconds
+
+    bool initialized;
+    int64_t initial_t0;       // downsampled
+    int64_t curr_chunk_t0;    // downsampled
+    int64_t curr_chunk_nt;    // downsampled
+
+    ssize_t nt_alloc;         // must be at least curr_chunk_nt
+    std::vector<float> intensity_buf;
+    std::vector<float> weights_buf;
+
+    downsampled_intensity(int nt_downsample);
+
+    //
+    // When process_chunk() returns, the following members of 'struct downsampled_intensity' will be initialized
+    //    curr_chunk_t0
+    //    curr_chunk_nt
+    //    intensity_buf     shape (constants::chime_nfreq, 2, curr_chunk_nt)   note that the stride is curr_chunk_nt, not nt_alloc
+    //    weights_buf       shape (constants::chime_nfreq, 2, curr_chunk_nt)
+    //
+    void process_chunk(const std::shared_ptr<assembled_chunk> &a);
+};
+
+
 }  // namespace ch_vdif_assembler
 
 #endif // _CH_VDIF_ASSEMBLER_HPP

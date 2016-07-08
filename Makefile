@@ -45,6 +45,7 @@ OFILES=assembler_nerve_center.o \
 	assembler_thread.o \
 	disk_reader_thread.o \
 	disk_writer_thread.o \
+	downsampled_intensity.o \
 	intensity_beam.o \
 	misc.o \
 	network_thread.o \
