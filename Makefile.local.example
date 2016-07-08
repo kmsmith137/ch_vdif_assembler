@@ -1,3 +1,5 @@
+HAVE_CH_FRB_IO=y
+
 # Directory where executables will be installed (run-vdif-assembler, show-moose-acqusitions.py)
 BINDIR=$(HOME)/bin
 

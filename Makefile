@@ -41,7 +41,30 @@ PYMODULES=ch_vdif_assembler.py
 SCRIPTS=show-moose-acquisitions.py index_vdif_waterfalls.py
 TESTBINFILES=test-timestamp-unwrapper test-kernels time-kernels peek-at-kernels
 
-OFILES=assembler_nerve_center.o assembler_thread.o disk_reader_thread.o disk_writer_thread.o misc.o network_thread.o processing_thread.o rfi_histogrammer.o sim_thread.o timing_thread.o unit_testing_thread.o waterfall_plotter.o
+OFILES=assembler_nerve_center.o \
+	assembler_thread.o \
+	disk_reader_thread.o \
+	disk_writer_thread.o \
+	misc.o \
+	network_thread.o \
+	processing_thread.o \
+	rfi_histogrammer.o \
+	sim_thread.o \
+	timing_thread.o \
+	unit_testing_thread.o \
+	waterfall_plotter.o
+
+LIBS=
+
+ifeq ($(HAVE_CH_FRB_IO),y)
+	CPP += -DHAVE_CH_FRB_IO
+        LIBS += -lch_frb_io
+endif
+
+LIBS += -lhdf5 -lpng
+
+
+####################################################################################################
 
 
 all: $(BINFILES) $(LIBFILES) $(LIBCYTHON) $(TESTBINFILES)
@@ -58,10 +81,10 @@ libch_vdif_assembler.so: $(OFILES)
 	$(CPP) -o $@ -shared $^
 
 ch_vdif_assembler_cython.so: ch_vdif_assembler_cython.cpp libch_vdif_assembler.so
-	$(CPP) -shared -o $@ $< -lch_vdif_assembler -lhdf5 -lpng
+	$(CPP) -shared -o $@ $< -lch_vdif_assembler $(LIBS)
 
 run-vdif-assembler: run-vdif-assembler.o libch_vdif_assembler.so
-	$(CPP) -o $@ $< -lch_vdif_assembler -lhdf5 -lpng
+	$(CPP) -o $@ $< -lch_vdif_assembler $(LIBS)
 
 test-timestamp-unwrapper: test-timestamp-unwrapper.cpp ch_vdif_assembler_internals.hpp
 	$(CPP) -o $@ $<
