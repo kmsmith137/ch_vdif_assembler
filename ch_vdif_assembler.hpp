@@ -296,6 +296,8 @@ struct vdif_processor : noncopyable {
 //
 std::shared_ptr<vdif_processor> make_waterfall_plotter(const std::string &outdir, bool is_critical=false);
 
+std::shared_ptr<vdif_processor> make_intensity_beam(const std::string &acqdir);
+
 std::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_hdf5_filename, bool is_critical=false, bool ref_flag=false);
 
 
