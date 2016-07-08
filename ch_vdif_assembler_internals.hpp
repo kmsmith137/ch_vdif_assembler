@@ -63,6 +63,11 @@ inline void deadlock()
     pthread_cond_wait(&cond, &mutex);
 }
 
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&& ...args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
 extern std::string make_dataset_name();
 extern std::string make_data_dir(const std::string &dataset_name, int disk_id);

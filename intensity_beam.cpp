@@ -1,4 +1,9 @@
-#include "ch_vdif_assembler.hpp"
+#include <cstring>
+#include "ch_vdif_assembler_internals.hpp"
+
+#ifdef HAVE_CH_FRB_IO
+#include <ch_frb_io.hpp>
+#endif
 
 using namespace std;
 
@@ -17,24 +22,23 @@ shared_ptr<vdif_processor> make_intensity_beam(const string &acqdir)
 
 #else  // HAVE_CH_FRB_IO
 
-
 struct intensity_beam : public vdif_processor {
     // hardcoded for now, may make a parameter later
-    constexpr int nt_downsample = 512;
-    constexpr int nt_file_max = 16384;
+    static constexpr int nt_downsample = 512;
+    static constexpr int nt_maxfile = 16384;
 
     string acqdir;
 
     bool initialized;
     int64_t first_timestamp;
     int64_t last_fileid;
-    std::unique_ptr<intensity_hdf5_ofile> curr_ofile;
+    std::unique_ptr<ch_frb_io::intensity_hdf5_ofile> curr_ofile;
     
     ssize_t nt_alloc;
     std::vector<float> intensity_buf;
     std::vector<float> weights_buf;
 
-    intensity_beam(const string &acqdir)
+    intensity_beam(const string &acqdir);
     virtual ~intensity_beam() { }
 
     virtual void process_chunk(const shared_ptr<assembled_chunk> &a) override;
@@ -43,6 +47,7 @@ struct intensity_beam : public vdif_processor {
 
 
 intensity_beam::intensity_beam(const string &acqdir_) :
+    vdif_processor("intensity_beam", true),
     acqdir(acqdir_), initialized(false), first_timestamp(0), nt_alloc(0)
 { }
 
@@ -85,7 +90,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 	double time0 = a->t0 * dt_sample;
 	int bitshuffle = 3;    // mandatory compression
 
-	this->curr_ofile = make_unique<intensity_hdf5_ofile> (filename, nfreq, pol, freq0_MHz, freq1_MHz, dt_sample, ipos0, time0, bitshuffle);
+	this->curr_ofile = make_unique<ch_frb_io::intensity_hdf5_ofile> (filename, nfreq, pol, freq0_MHz, freq1_MHz, dt_sample, ipos0, time0, bitshuffle);
 	this->last_fileid = fileid;
     }
 
@@ -102,7 +107,7 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
     memset(weightsp, 0, nfreq * nt_chunk_lores * sizeof(float));
     
     // assumed in loop below (sum16_auto_correlations)
-    static_assert(nt_downsample % 16 == 0);
+    static_assert(nt_downsample % 16 == 0, "intensity_beam::nt_downsample not divisible by 16");
 
     for (int ifreq = 0; ifreq < nfreq; ifreq++) {
 	for (int ipol = 0; ipol < 2; ipol++) {
@@ -129,11 +134,14 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
     }
 
     for (int i = 0; i < nfreq*nt_chunk_lores; i++) {
-	intensityp[i] /= max(weightsp[i], 1.0);    // convert weight*intensity -> intensity (avoiding divide-by-zero)
-	weightsp[i] /= (2*nt_downsample);          // normalize to max weight 1
+	intensityp[i] /= max(weightsp[i], (float)1.0);  // convert weight*intensity -> intensity (avoiding divide-by-zero)
+	weightsp[i] /= (2*nt_downsample);               // normalize to max weight 1
     }
 
-    this->curr_ofile->append_chunk(a->nt, intensityp, weightsp, a->t0);
+    curr_ofile->append_chunk(a->nt, intensityp, weightsp, a->t0);
+
+    if (curr_ofile->curr_nt >= nt_maxfile)
+	this->curr_ofile = unique_ptr<ch_frb_io::intensity_hdf5_ofile> ();  // emptying this pointer flushes and writes file
 }
 
 
