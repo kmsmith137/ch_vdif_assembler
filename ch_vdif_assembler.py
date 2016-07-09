@@ -282,6 +282,8 @@ except:
 
 
 class python_waterfall_plotter(processor):
+    """FIXME this should use the downsampled_intensity helper class, but it hasn't been cythonized yet!"""
+
     def __init__(self, outdir):
         self.outdir = outdir
         self.imgdir = os.path.join(outdir, 'img')
