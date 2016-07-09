@@ -6,13 +6,13 @@ using namespace ch_vdif_assembler;
 
 int main(int argc, char **argv)
 {
-    cerr << "test-downsampled_intensity";
+    cerr << "test-downsampled_intensity (this test takes a few minutes)";
 
     for (int iouter = 0; iouter < 100; iouter++) {
 	cerr << ".";
 
-	int nt_downsample = pow2(randint(4,11));
-	int nt_assembler = pow2(randint(nt_downsample+3, 17));
+	int nt_downsample = pow2(randint(4,7));
+	int nt_assembler = pow2(randint(nt_downsample+3, 11));
 	int64_t current_t0 = nt_assembler * randint(0, 10);
 	int nchunks = randint(0, 100);
 
