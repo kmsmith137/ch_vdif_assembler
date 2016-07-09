@@ -345,7 +345,7 @@ shared_ptr<assembled_chunk> assembled_chunk::make_random(const shared_ptr<assemb
 
     shared_ptr<assembled_chunk> ret = make_shared<assembled_chunk> (pool, t0);
     uint8_t *buf = const_cast<uint8_t *> (ret->buf);
-    int nbuf = constants::nfreq * 2 * ret->nt;
+    int nbuf = constants::chime_nfreq * 2 * ret->nt;
 
     for (int i = 0; i < nbuf; i++) {
 	if (uniform_rand() < 0.1) {

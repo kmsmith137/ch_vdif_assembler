@@ -462,7 +462,7 @@ struct assembled_chunk : noncopyable {
     }	
 
     // also intended for testing
-    static std::shared_ptr<assembled_chunk> make_random(const std::shared_ptr<assembled_chunk_pool> &pool, int64_t min_allowed t0);
+    static std::shared_ptr<assembled_chunk> make_random(const std::shared_ptr<assembled_chunk_pool> &pool, int64_t min_allowed_t0);
 };
 
 
@@ -497,7 +497,7 @@ struct downsampled_intensity {
     void process_chunk(const std::shared_ptr<assembled_chunk> &a);
     
     // A slow reference version of process_chunk(), only used for testing
-    void process_chunk_reference(const std::shared_ptr<assembled_chunk> &a)
+    void process_chunk_reference(const std::shared_ptr<assembled_chunk> &a);
 };
 
 

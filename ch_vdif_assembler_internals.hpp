@@ -29,6 +29,12 @@ inline bool is_power_of_two(int n)
     return (n & (n-1)) == 0;
 }
 
+inline int pow2(int n)
+{
+    xassert(n >= 0 && n <= 30);
+    return 1 << n;
+}
+
 inline double time_diff(const struct timeval &tv1, const struct timeval &tv2)
 {
     return (tv2.tv_sec - tv1.tv_sec) + 1.0e-6 * (tv2.tv_usec - tv1.tv_usec);

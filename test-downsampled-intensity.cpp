@@ -16,12 +16,12 @@ int main(int argc, char **argv)
 	int64_t current_t0 = nt_assembler * randint(0, 10);
 	int nchunks = randint(0, 100);
 
-	assembled_chunk_pool pool(nt_assembler);
+	shared_ptr<assembled_chunk_pool> pool = make_shared<assembled_chunk_pool> (nt_assembler);
 	downsampled_intensity ds1(nt_downsample);
 	downsampled_intensity ds2(nt_downsample);
 
 	for (int ichunk = 0; ichunk < nchunks; ichunk++) {
-	    shared_ptr<assembled_chunk> chunk = assembled_chunk::make_random(current_t0);
+	    shared_ptr<assembled_chunk> chunk = assembled_chunk::make_random(pool, current_t0);
 	    current_t0 = chunk->t0 + chunk->nt;
 
 	    ds1.process_chunk(chunk);
@@ -31,7 +31,7 @@ int main(int argc, char **argv)
 	    xassert(ds1.curr_chunk_t0 == ds2.curr_chunk_t0);
 	    xassert(ds1.curr_chunk_nt == ds2.curr_chunk_nt);
 
-	    int nbuf = constants::nfreq * 2 * (nt_assembler/nt_downsample);
+	    int nbuf = constants::chime_nfreq * 2 * (nt_assembler/nt_downsample);
 
 	    for (int i = 0; i < nbuf; i++) {
 		xassert(fabs(ds1.intensity_buf[i] - ds2.intensity_buf[i]) < 1.0e-4);
