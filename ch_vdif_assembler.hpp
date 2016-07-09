@@ -346,6 +346,10 @@ std::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_
 //
 // WARNING 4: For real-time network captures, assembly language kernels will probably
 // be necessary, feel free to email me if you need one!
+//
+// A final note: for processors which only need to use downsampled intensity data
+// (not high-speed baseband data) the simplest approach is to use the helper class
+// downsampled_intensity, see below!
 
 
 struct assembled_chunk : noncopyable {
@@ -468,8 +472,10 @@ struct assembled_chunk : noncopyable {
 
 // -------------------------------------------------------------------------------------------------
 //
-// A helper class for vdif_processors which process intensity data (i.e. squared downsampled baseband)
-// instead of baseband data.
+// A helper class for vdif_processors which process downsampled intensity data rather than high-speed
+// baseband.  Rather than handle the assembled_chunk directly, the vdif_processor can pass it to
+// downsampled_intensity::process_chunk(), and fill a buffer containing all downsampled intensities
+// derived from the assembled_chunk.
 
 
 struct downsampled_intensity {

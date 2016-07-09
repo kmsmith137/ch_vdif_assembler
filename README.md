@@ -16,7 +16,7 @@ data to disk, or buffer data and save it to disk if one of the
 processing tasks sets a trigger.
 
 
-# INSTALLATION
+## INSTALLATION
 
 - You'll need the following prerequisites.  Boost is no longer
   needed but you'll need a newish C++ compiler with C++11 support.
@@ -56,7 +56,7 @@ processing tasks sets a trigger.
   network capture.
 
 
-# WRITING EXTENSIONS
+## WRITING EXTENSIONS
 
 To integrate C++ code with ch_vdif_assembler, you'll want to 
 define a subclass of the virtual base class vdif_processor.  For 
