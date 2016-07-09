@@ -39,7 +39,7 @@ LIBFILES=libch_vdif_assembler.so
 LIBCYTHON=ch_vdif_assembler_cython.so
 PYMODULES=ch_vdif_assembler.py
 SCRIPTS=show-moose-acquisitions.py index_vdif_waterfalls.py
-TESTBINFILES=test-timestamp-unwrapper test-kernels time-kernels peek-at-kernels
+TESTBINFILES=test-timestamp-unwrapper test-kernels test-downsampled-intensity time-kernels peek-at-kernels
 
 OFILES=assembler_nerve_center.o \
 	assembler_thread.o \
@@ -92,6 +92,9 @@ test-timestamp-unwrapper: test-timestamp-unwrapper.cpp ch_vdif_assembler_interna
 	$(CPP) -o $@ $<
 
 test-kernels: test-kernels.cpp ch_vdif_assembler_kernels.hpp
+	$(CPP) -o $@ $<
+
+test-downsampled-intensity: test-downsampled-intensity.cpp ch_vdif_assembler_internals.hpp
 	$(CPP) -o $@ $<
 
 time-kernels: time-kernels.cpp ch_vdif_assembler_kernels.hpp
