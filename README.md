@@ -16,8 +16,7 @@ data to disk, or buffer data and save it to disk if one of the
 processing tasks sets a trigger.
 
 
-INSTALLATION
-------------
+# INSTALLATION
 
 - You'll need the following prerequisites.  Boost is no longer
   needed but you'll need a newish C++ compiler with C++11 support.
@@ -32,14 +31,17 @@ INSTALLATION
   of the examples in `site/` (or just symlink one of these
   examples to `./Makefile.local`)
 
-- You should now be able to compile with
+- You should now be able to compile with `make all install`.
+
+- If you want to run some unit tests:
 ```
-    make
-    make install
+./test-timestamp-unwrapper
+./test-kernels
+./test-downsampled-intensity
+./run-vdif-assembler -u
 ```
 
-- To try it out, run the executable 
-     ./run-vdif-assembler 
+- To try it out, run the executable `./run-vdif-assembler`
   and follow the instructions!
 
 - A performance puzzle: the assembly-language-kernel-enabled
@@ -54,14 +56,13 @@ INSTALLATION
   network capture.
 
 
-WRITING EXTENSIONS
-------------------
+# WRITING EXTENSIONS
 
-  To integrate C++ code with ch_vdif_assembler, you'll want to 
-  define a subclass of the virtual base class vdif_processor.  For 
-  a lot more detail, see comments in ch_vdif_assembler.hpp or
-  an example C++ class in waterfall_plotter.cpp.
+To integrate C++ code with ch_vdif_assembler, you'll want to 
+define a subclass of the virtual base class vdif_processor.  For 
+a lot more detail, see comments in ch_vdif_assembler.hpp or
+an example C++ class in waterfall_plotter.cpp.
 
-  There's also a python interface which will probably never be fast 
-  enough for realtime processing, but may be useful for prototyping 
-  code using captured data on disk.
+There's also a python interface which will probably never be fast 
+enough for realtime processing, but may be useful for prototyping 
+code using captured data on disk.
