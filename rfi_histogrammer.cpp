@@ -308,6 +308,7 @@ struct rfi_histogrammer : public vdif_processor {
 
     // If @ref_flag is specified, then the reference implementation will be used (slow but simple code)
     rfi_histogrammer(const string &output_hdf5_filename, bool is_critical, bool ref_flag);
+    virtual ~rfi_histogrammer() { }
 
     void write_hdf5_file(const string &filename) const;
 
