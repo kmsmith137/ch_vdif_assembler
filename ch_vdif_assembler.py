@@ -183,12 +183,13 @@ class processor:
 
 class moose_inventory:
     def __init__(self):
+        suffixes = [ '_chime_beamformed', '_vdif_assembler' ]
         self.topdirs = [ ('/drives/G/%d' % i) for i in xrange(10) ]
         self.subdirs = set()
 
         for t in self.topdirs:
             for s in os.listdir(t):
-                if not s.endswith('_chime_beamformed'):
+                if not any(s.endswith(suffix) for suffix in suffixes)
                     continue
                 if len(os.listdir(os.path.join(t,s))) == 0:
                     continue   # skip empty "acquisitions"

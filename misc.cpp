@@ -608,7 +608,7 @@ string make_data_dir(const string &dataset_name, int disk_id)
     xassert(disk_id >= 0);
     xassert(disk_id < constants::num_disks);
 
-    string outdir = string("/drives/E/") + to_string(disk_id) + string("/") + dataset_name;
+    string outdir = string("/drives/G/") + to_string(disk_id) + string("/") + dataset_name;
     // xmkdir(outdir);
     return outdir;
 }
