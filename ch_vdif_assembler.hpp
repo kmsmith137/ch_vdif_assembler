@@ -106,15 +106,16 @@ namespace ch_vdif_assembler {
 
 
 namespace constants {
-    static const int chime_nfreq = 1024;
-    static const int header_nbytes = 32;
-    static const int timestamps_per_packet = 625;
-    static const int timestamps_per_frame = 1 << 23;    // cadence of noise source
-    static const int packet_nbytes = 5032;              // = header_nbytes + 8 * timestamps_per_packet
-    static const int num_disks = 10;
-    static const int default_abuf_size = 4;
-    static const int default_assembler_nt = 65536;
-    static const int cache_line_size = 64;
+    static constexpr int chime_nfreq = 1024;
+    static constexpr int header_nbytes = 32;
+    static constexpr int timestamps_per_packet = 625;
+    static constexpr int timestamps_per_frame = 1 << 23;    // cadence of noise source
+    static constexpr int packet_nbytes = 5032;              // = header_nbytes + 8 * timestamps_per_packet
+    static constexpr int num_disks = 10;
+    static constexpr int default_abuf_size = 4;
+    static constexpr int default_assembler_nt = 65536;
+    static constexpr int cache_line_size = 64;
+    static constexpr double dt_fpga = 2.56e-6;              // seconds per FPGA count
 };
 
 

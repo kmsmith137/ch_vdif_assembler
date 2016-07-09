@@ -15,7 +15,7 @@ namespace ch_vdif_assembler {
 
 downsampled_intensity::downsampled_intensity(int nt_downsample_) :
     nt_downsample(nt_downsample_), 
-    dt_sample(2.56e-6 * nt_downsample_),
+    dt_sample(constants::dt_fpga * nt_downsample_),
     initialized(false),
     nt_alloc(0)
 {
