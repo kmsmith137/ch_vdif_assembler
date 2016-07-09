@@ -189,7 +189,7 @@ class moose_inventory:
 
         for t in self.topdirs:
             for s in os.listdir(t):
-                if not any(s.endswith(suffix) for suffix in suffixes)
+                if not any(s.endswith(suffix) for suffix in suffixes):
                     continue
                 if len(os.listdir(os.path.join(t,s))) == 0:
                     continue   # skip empty "acquisitions"
