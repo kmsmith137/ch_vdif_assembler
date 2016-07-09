@@ -299,6 +299,7 @@ inline void _assemble128(uint8_t *dst, int stride, const uint8_t *src, int n)
 // -------------------------------------------------------------------------------------------------
 
 
+// only used in slow reference kernels, not fast assembly-language kernels
 static inline void offset_decode(int &re, int &im, uint8_t byte)
 {
     re = (int)((byte & 0xf0) >> 4) - 8;

@@ -373,7 +373,7 @@ struct assembled_chunk : noncopyable {
     // These methods are a little slow and intended for unit testing
     bool is_zero() const;
     bool is_equal(const assembled_chunk &a) const;
-    
+
     //
     // Should probably never be used in "production" code (an assembly language kernel will
     // probably be necessary) but useful during development.
@@ -460,6 +460,9 @@ struct assembled_chunk : noncopyable {
 	    }
 	}
     }	
+
+    // also intended for testing
+    static std::shared_ptr<assembled_chunk> make_random(const std::shared_ptr<assembled_chunk_pool> &pool, int64_t min_allowed t0);
 };
 
 

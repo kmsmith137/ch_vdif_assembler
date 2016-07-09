@@ -337,6 +337,32 @@ bool assembled_chunk::is_equal(const assembled_chunk &a) const
 }
 
 
+// static member function
+shared_ptr<assembled_chunk> assembled_chunk::make_random(const shared_ptr<assembled_chunk_pool> &pool, int64_t min_allowed_t0)
+{
+    int ngap = max(randint(-10,10), 0);   // 50% chance of no gap
+    int64_t t0 = min_allowed_t0 + ngap * pool->assembler_nt;
+
+    shared_ptr<assembled_chunk> ret = make_shared<assembled_chunk> (pool, t0);
+    uint8_t *buf = const_cast<uint8_t *> (ret->buf);
+    int nbuf = constants::nfreq * 2 * ret->nt;
+
+    for (int i = 0; i < nbuf; i++) {
+	if (uniform_rand() < 0.1) {
+	    buf[i] = (uint8_t)0;
+	    continue;
+	}
+
+	uint8_t re = randint(1,16);
+	uint8_t im = randint(1,16);
+	buf[i] = (re << 4) | im;
+    }
+
+    return ret;
+}
+
+
+
 // -------------------------------------------------------------------------------------------------
 //
 // vdif_assembler
