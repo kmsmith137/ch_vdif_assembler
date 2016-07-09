@@ -1,20 +1,19 @@
 ch_vdif_assembler: a multithreaded, real-time acqusition system for CHIME high-speed data.
 
-This version (v2) is fast enough to keep up with a real-time 
-6.4 Gbps network capture, but using assembly language kernels 
-seems to be necessary!  (see ch_vdif_assembler_kernels.hpp).
+A vdif_assembler instance consists of a "stream" of high-speed baseband data (vdif packets), 
+which is transposed and assembled into a contiguous buffer, and handed off to one or more
+"processor" threads.
 
-Unforuntately it's likely that as new processing tasks are
-added, it may be necessary to add new assembly language kernels
-if we want to run in real time.  My plan is to keep doing this
-on an ad hoc basis until we hopefully converge to a set of
-kernels which is general enough to cover all practical cases.
+The stream can be either a real-time network stream or a saved capture.
+Examples of processing threads include disk writers, plotters, and real-time transient searches.
 
-This version also supports running multiple processing tasks,
-which will be run in different threads.  It can also stream
-data to disk, or buffer data and save it to disk if one of the
-processing tasks sets a trigger.
-
+Example usage (for a complete list of flags, do ./run-vdif-assembler with no arguments)
+```
+./run-vdif-assembler -n \     # -n flag sets input stream to be a real-time network capture
+    -d \                     # -d flag saves baseband data to disk (information-preserving)
+    -i INTENSITY_DIR \       # -i flag saves downsampled intensity data (e.g. for offline FRB search)
+    -w WATERFALL_DIR         # -w flag saves .png waterfall plots
+```
 
 ### INSTALLATION
 
