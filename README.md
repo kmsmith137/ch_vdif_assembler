@@ -11,49 +11,47 @@ on an ad hoc basis until we hopefully converge to a set of
 kernels which is general enough to cover all practical cases.
 
 This version also supports running multiple processing tasks,
-which will be run in different threads.  (E.g. waterfall_plotter 
-+ FRB search + GPU-based pulsar backend.)  It can also stream
+which will be run in different threads.  It can also stream
 data to disk, or buffer data and save it to disk if one of the
 processing tasks sets a trigger.
-
-A few features from v1 are currently missing (most notably rfi
-masks) but I hope to reinstate them soon!
-
-A performance puzzle: the assembly-language-kernel-enabled
-assembler runs 5 times faster on moose (3.5 GHz Haswell-E,
-gcc 4.4.7) than on my desktop (2.4 GHz Haswell, gcc 4.8.3)!
-This seems worth understanding and fixing, but I haven't gotten
-to the bottom of it yet.  In the meantime, if you use moose
-you should be fine, but you may find poor performance on other
-machines.  For a performance test, do ./run-vdif-assembler -t.
-This gives ~13 Gbps on moose and 2.5 Gbps on my desktop, where
-6.4 Gbps is the minimum needed to keep up with a real-time
-network capture.
 
 
 INSTALLATION
 ------------
 
- - You'll need the following prerequisites.  Boost is no longer
-   needed but you'll need a newish C++ compiler with C++11 support.
+- You'll need the following prerequisites.  Boost is no longer
+  needed but you'll need a newish C++ compiler with C++11 support.
     - python
     - numpy
     - cython
     - libpng
     - libhdf5
 
-  - Create a file Makefile.local as described in comments in 
-    Makefile.local.example.  You can probably start with 
-       cp Makefile.local.example Makefile.local'
-    and then edit a little from there
+- Create a file Makefile.local as described in comments in 
+  Makefile.local.example.  You can probably start with one
+  of the examples in `site/` (or just symlink one of these
+  examples to `./Makefile.local`)
 
-  - You should now be able to compile with
-      make
-      make install
+- You should now be able to compile with
+```
+    make
+    make install
+```
 
-  - To try it out, run the executable 
-       ./run-vdif-assembler 
-    and follow the instructions!
+- To try it out, run the executable 
+     ./run-vdif-assembler 
+  and follow the instructions!
+
+- A performance puzzle: the assembly-language-kernel-enabled
+  assembler runs 5 times faster on moose (3.5 GHz Haswell-E,
+  gcc 4.4.7) than on my desktop (2.4 GHz Haswell, gcc 4.8.3)!
+  This seems worth understanding and fixing, but I haven't gotten
+  to the bottom of it yet.  In the meantime, if you use moose
+  you should be fine, but you may find poor performance on other
+  machines.  For a performance test, do ./run-vdif-assembler -t.
+  This gives ~13 Gbps on moose and 2.5 Gbps on my desktop, where
+  6.4 Gbps is the minimum needed to keep up with a real-time
+  network capture.
 
 
 WRITING EXTENSIONS

@@ -1,3 +1,5 @@
+// FIXME this code could be streamlined significantly by using the downsampled_intensity helper class
+
 #include <cmath>
 #include <cstring>
 #include <algorithm>
