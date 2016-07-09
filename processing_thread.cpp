@@ -42,6 +42,7 @@ struct processing_thread : public thread_base {
 	    throw_rerun_exception();
     }
 
+    virtual ~processing_thread() { }
 	
     void thread_body()
     {
