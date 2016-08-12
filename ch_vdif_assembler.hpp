@@ -103,6 +103,8 @@ namespace ch_vdif_assembler {
 // -------------------------------------------------------------------------------------------------
 //
 // Constants
+//
+// Note: dt_fpga must be kept in sync with rf_pipelines::chime_seconds_per_fpga_count (see discussion in rf_pipelines.hpp)
 
 
 namespace constants {
