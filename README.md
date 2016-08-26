@@ -25,10 +25,9 @@ Example usage (for a complete list of flags, do ./run-vdif-assembler with no arg
     - libpng
     - libhdf5
 
-- Create a file Makefile.local as described in comments in 
-  Makefile.local.example.  You can probably start with one
-  of the examples in `site/` (or just symlink one of these
-  examples to `./Makefile.local`)
+- Create a file Makefile.local as described in comments in the Makefile.
+  You can probably start with one of the examples in `site/` (or just 
+  symlink one of these examples to `./Makefile.local`)
 
 - You should now be able to compile with `make all install`.
 
