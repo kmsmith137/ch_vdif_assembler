@@ -4,6 +4,7 @@
 *.pyc
 *_cython.cpp
 Makefile.local
+test-downsampled-intensity
 test-kernels
 test-timestamp-unwrapper
 run-vdif-assembler
