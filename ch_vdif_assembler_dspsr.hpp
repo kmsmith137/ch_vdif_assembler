@@ -15,6 +15,7 @@
 #define _CH_VDIF_ASSEMBLER_DSPSR_HPP
 
 // Note: no C++11 includes (including ch_vdif_assembler.hpp!)
+#include <stdint.h>
 #include <string>
 
 namespace ch_vdif_assembler {
