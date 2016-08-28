@@ -9,6 +9,11 @@ namespace ch_vdif_assembler {
 #endif
 
 
+// static global varibles
+const int dspsr_handle::nfreq = constants::chime_nfreq;
+const double dspsr_handle::sampling_rate_Hz = 1.0 / constants::dt_fpga;
+
+
 struct dspsr_handle_implementation : public dspsr_handle
 {
     shared_ptr<vdif_stream> stream;
@@ -27,19 +32,6 @@ struct dspsr_handle_implementation : public dspsr_handle
 dspsr_handle *dspsr_handle::make(const string &filelist_filename)
 {
     return new dspsr_handle_implementation(filelist_filename);
-}
-
-// static member function
-int dspsr_handle::get_nchan()
-{
-    return constants::chime_nfreq;
-}
-
-// static member function
-double dspsr_handle::get_rate()
-{
-    // sample rate in Hz
-    return 1.0 / constants::dt_fpga;
 }
 
 
