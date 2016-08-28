@@ -25,7 +25,7 @@ namespace ch_vdif_assembler {
 
 struct dspsr_handle {
     static const int nfreq;
-    static const int nt_chunk;
+    static const int64_t nt_chunk;
     static const double sampling_rate_Hz;
     
     // 
