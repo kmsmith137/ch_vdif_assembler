@@ -29,5 +29,18 @@ dspsr_handle *dspsr_handle::make(const string &filelist_filename)
     return new dspsr_handle_implementation(filelist_filename);
 }
 
+// static member function
+int dspsr_handle::get_nchan()
+{
+    return constants::chime_nfreq;
+}
+
+// static member function
+double dspsr_handle::get_rate()
+{
+    // sample rate in Hz
+    return 1.0 / constants::dt_fpga;
+}
+
 
 }   // namespace ch_vdif_assembler

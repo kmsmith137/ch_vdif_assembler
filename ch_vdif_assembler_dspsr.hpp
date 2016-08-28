@@ -27,6 +27,8 @@ struct dspsr_handle {
     virtual ~dspsr_handle() { }
 
     static dspsr_handle *make(const std::string &filelist_filename);
+    static int get_nchan();
+    static double get_rate();  // sample rate in Hz
 };
 
 
