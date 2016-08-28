@@ -27,9 +27,19 @@ struct dspsr_handle {
     static const int nfreq;
     static const int nt_chunk;
     static const double sampling_rate_Hz;
+    
+    // 
+    // When the dspsr_handle is constructed, curr_chunk_ix is set to (-1) and curr_data is set to NULL.
+    // In the first call to advance(), the stream is started, curr_chunk_ix is set to 0, and curr_data
+    // points to the (4+4)-bit data.  Subsequent calls to advance() will modify curr_chunk_ix and curr_data
+    // appropriately until end-of-stream is reached, at which point curr_data is set to NULL.
+    // 
+    int64_t curr_chunk_ix;
+    const uint8_t *curr_data;
 
+    virtual void advance() = 0;
     virtual ~dspsr_handle() { }
-
+    
     static dspsr_handle *make(const std::string &filelist_filename);
 };
 
