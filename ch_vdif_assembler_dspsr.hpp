@@ -25,12 +25,12 @@ namespace ch_vdif_assembler {
 
 struct dspsr_handle {
     static const int nfreq;
+    static const int nt_chunk;
     static const double sampling_rate_Hz;
 
     virtual ~dspsr_handle() { }
 
     static dspsr_handle *make(const std::string &filelist_filename);
-    static double get_rate();  // sample rate in Hz
 };
 
 

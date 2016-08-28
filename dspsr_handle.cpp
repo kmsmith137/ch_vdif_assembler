@@ -11,6 +11,7 @@ namespace ch_vdif_assembler {
 
 // static global varibles
 const int dspsr_handle::nfreq = constants::chime_nfreq;
+const int dspsr_handle::nt_chunk = constants::default_assembler_nt;
 const double dspsr_handle::sampling_rate_Hz = 1.0 / constants::dt_fpga;
 
 
