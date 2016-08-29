@@ -34,6 +34,9 @@ struct dspsr_handle {
     // In the first call to advance(), the stream is started, curr_chunk_ix is set to 0, and curr_data
     // points to the (4+4)-bit data.  Subsequent calls to advance() will modify curr_chunk_ix and curr_data
     // appropriately until end-of-stream is reached, at which point curr_data is set to NULL.
+    //
+    // The 'curr_data' pointer is an array of shape (nfreq, 2, nt_chunk) containing (4+4)-bit offset-encoded
+    // complex numbers.  Invalid entries are represented by 0x00.
     // 
     int64_t curr_chunk_ix;
     const uint8_t *curr_data;
