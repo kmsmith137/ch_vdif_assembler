@@ -1,3 +1,5 @@
+- v4: backwards-compatible update, defines interface for use by the 'dspsr' pulsar timing code (class dspsr_handle)
+
 - v3:
   - downsampled_intensity helper class, for vdif_processors which process downsampled intensity data (rather than high-speed baseband)
   - intensity_beam processor thread, for writing downsampled intensity data to disk in CHIMEFRB hdf5 format (`run-vdif-assembler -i`)
