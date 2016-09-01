@@ -26,6 +26,7 @@ static void usage(const char *msg = NULL)
 	 << "    -u                                 to run a unit-testing stream/processor pair which compares the fast assembler to a reference implementation\n"
 	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers (to diagnose memory bandwidth bottlenecks)\n"
 	 << "    -L                                 enables the \"Liam hack\", a temporary mechanism for processing the incoherent beam which will eventually be superseded\n"
+	 << "    -H                                 use /drives/H for baseband dumps (default is /drives/B)\n"
 	 << "\n"
 	 << "You may find the script show-moose-acqusitions.py useful for making file lists.  Example usage of this script:\n"
 	 << "\n"
@@ -95,6 +96,7 @@ int main(int argc, char **argv)
     static const int timing_npackets_per_chunk = 50000;
     int timing_nchunks = 128;   // default value
 
+    char drive_bank = constants::default_drive_bank;
     bool is_timing = false;
     bool write_to_disk = false;
     bool mischief_flag = false;
@@ -172,6 +174,12 @@ int main(int argc, char **argv)
 
 	if (cs == 'L') {
 	    liam_hack = true;
+	    pos++;
+	    continue;
+	}
+
+	if (cs == 'H') {
+	    drive_bank = 'H';
 	    pos++;
 	    continue;
 	}
@@ -269,7 +277,11 @@ int main(int argc, char **argv)
     if (!is_timing && !write_to_disk && !processors.size())
 	usage("no processors specified, nothing to do");
     
-    vdif_assembler assembler(write_to_disk);
+    vdif_assembler assembler(write_to_disk,
+			     constants::num_disks,   // rbuf_size
+			     constants::default_abuf_size,
+			     constants::default_assembler_nt,
+			     drive_bank);
 
     for (unsigned int i = 0; i < processors.size(); i++)
 	assembler.register_processor(processors[i]);
