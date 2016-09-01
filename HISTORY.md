@@ -1,3 +1,7 @@
+- incoherent_beam branch:
+  - support for incoherent beam
+  - selectable drive bank
+
 - v4: backwards-compatible update, defines interface for use by the 'dspsr' pulsar timing code (class dspsr_handle)
 
 - v3:
