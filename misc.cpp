@@ -368,7 +368,7 @@ shared_ptr<assembled_chunk> assembled_chunk::make_random(const shared_ptr<assemb
 // vdif_assembler
 
 
-vdif_assembler::vdif_assembler(bool write_to_disk, int rbuf_size, int abuf_size, int assembler_nt)
+vdif_assembler::vdif_assembler(bool write_to_disk, int rbuf_size, int abuf_size, int assembler_nt, char drive_bank)
     : nc(make_shared<assembler_nerve_center> (write_to_disk, rbuf_size, abuf_size, assembler_nt)),
       killer(make_shared<assembler_killer> (nc, "last reference to assembler dropped"))
 { 
@@ -377,7 +377,7 @@ vdif_assembler::vdif_assembler(bool write_to_disk, int rbuf_size, int abuf_size,
     spawn_assembler_thread(nc);
     
     for (int ithread = 0; ithread < constants::num_disks; ithread++) {
-	string data_dir = make_data_dir(dataset_name, ithread);
+	string data_dir = make_data_dir(dataset_name, ithread, drive_bank);
 	spawn_disk_writer_thread(nc, data_dir, ithread);
     }
 }
@@ -603,12 +603,12 @@ string make_dataset_name()
 }
 
 
-string make_data_dir(const string &dataset_name, int disk_id)
+string make_data_dir(const string &dataset_name, int disk_id, char drive_bank)
 {
     xassert(disk_id >= 0);
     xassert(disk_id < constants::num_disks);
 
-    string outdir = string("/drives/G/") + to_string(disk_id) + string("/") + dataset_name;
+    string outdir = string("/drives/") + drive_bank + "/" + to_string(disk_id) + "/" + dataset_name;
     // xmkdir(outdir);
     return outdir;
 }

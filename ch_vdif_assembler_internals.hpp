@@ -81,7 +81,7 @@ std::unique_ptr<T> make_unique(Args&& ...args)
 }
 
 extern std::string make_dataset_name();
-extern std::string make_data_dir(const std::string &dataset_name, int disk_id);
+extern std::string make_data_dir(const std::string &dataset_name, int disk_id, char drive_bank=constants::default_drive_bank);
 
 
 // -------------------------------------------------------------------------------------------------

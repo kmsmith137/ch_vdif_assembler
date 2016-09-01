@@ -118,6 +118,7 @@ namespace constants {
     static constexpr int default_assembler_nt = 65536;
     static constexpr int cache_line_size = 64;
     static constexpr double dt_fpga = 2.56e-6;              // seconds per FPGA count
+    static constexpr char default_drive_bank = 'B';
 };
 
 
@@ -193,7 +194,8 @@ struct vdif_assembler
     vdif_assembler(bool write_to_disk=false, 
 		   int rbuf_size=constants::num_disks, 
 		   int abuf_size=constants::default_abuf_size, 
-		   int assembler_nt=constants::default_assembler_nt);
+		   int assembler_nt=constants::default_assembler_nt,
+		   char drive_bank=constants::default_drive_bank);
 
     ~vdif_assembler();
 

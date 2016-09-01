@@ -14,9 +14,12 @@ struct disk_writer_thread : public thread_base {
     int thread_id;
     bool mkdir_called;
 
-    disk_writer_thread(const shared_ptr<assembler_nerve_center> &nc_, const string &outdir_, int thread_id_)
-	: thread_base("disk writer thread " + to_string(thread_id_)),
-	  nc(nc_), outdir(outdir_), thread_id(thread_id_), mkdir_called(false)
+    disk_writer_thread(const shared_ptr<assembler_nerve_center> &nc_, const string &outdir_, int thread_id_) :
+	thread_base("disk writer thread " + to_string(thread_id_)),
+	nc(nc_), 
+	outdir(outdir_), 
+	thread_id(thread_id_), 
+	mkdir_called(false)
     { 
 	xassert(thread_id >= 0);
 	xassert(thread_id < constants::num_disks);
