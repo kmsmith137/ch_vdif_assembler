@@ -290,7 +290,7 @@ struct vdif_processor : noncopyable {
 
 
 //
-// Some processors which are currently implemented, in waterfall_plotter.cpp and rfi_histogrammer.cpp.
+// Some processors which are currently implemented.
 //
 // We export factory functions returning pointers, in order to avoid polluting the .hpp files with details
 // of the processor implementations.
@@ -299,9 +299,12 @@ struct vdif_processor : noncopyable {
 //
 std::shared_ptr<vdif_processor> make_waterfall_plotter(const std::string &outdir, bool is_critical=false);
 
-std::shared_ptr<vdif_processor> make_intensity_beam(const std::string &acqdir);
-
 std::shared_ptr<vdif_processor> make_rfi_histogrammer(const std::string &output_hdf5_filename, bool is_critical=false, bool ref_flag=false);
+
+// If the liam_hack flag is set, the byte stream is interpreted as 8-bit real intensities, rather than 
+// (4+4)-bit offset-encoded electric field values.  This is a temporary mechanism for processing the
+// incoherent beam which will eventually be superseded.
+std::shared_ptr<vdif_processor> make_intensity_beam(const std::string &acqdir, bool liam_hack=false);
 
 
 // -------------------------------------------------------------------------------------------------
@@ -480,9 +483,9 @@ struct assembled_chunk : noncopyable {
 // downsampled_intensity::process_chunk(), and fill a buffer containing all downsampled intensities
 // derived from the assembled_chunk.
 //
-// The "Liam hack" interprets the byte stream as 8-bit real intensities, rather than (4+4)-bit offset-encoded
-// electric field values.  This is a temporary mechanism for capturing the incoherent beam which will
-// eventually be superseded.
+// If the liam_hack flag is set, the byte stream is interpreted as 8-bit real intensities, rather than 
+// (4+4)-bit offset-encoded electric field values.  This is a temporary mechanism for processing the
+// incoherent beam which will eventually be superseded.
 
 
 struct downsampled_intensity {

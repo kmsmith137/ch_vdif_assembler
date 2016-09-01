@@ -15,7 +15,7 @@ namespace ch_vdif_assembler {
 
 #ifndef HAVE_CH_FRB_IO
 
-shared_ptr<vdif_processor> make_intensity_beam(const string &acqdir)
+shared_ptr<vdif_processor> make_intensity_beam(const string &acqdir, bool liam_hack)
 {
     throw runtime_error("make_intensity_beam() was called, but this version of ch_vdif_assembler was compiled without libch_frb_io");
 }
@@ -32,7 +32,7 @@ struct intensity_beam : public vdif_processor {
     downsampled_intensity ds_int;
     std::unique_ptr<ch_frb_io::intensity_hdf5_ofile> curr_ofile;
 
-    intensity_beam(const string &acqdir);
+    intensity_beam(const string &acqdir, bool liam_hack);
     virtual ~intensity_beam() { }
 
     virtual void process_chunk(const shared_ptr<assembled_chunk> &a) override;
@@ -40,10 +40,10 @@ struct intensity_beam : public vdif_processor {
 };
 
 
-intensity_beam::intensity_beam(const string &acqdir_) :
+intensity_beam::intensity_beam(const string &acqdir_, bool liam_hack) :
     vdif_processor("intensity_beam", true),
     acqdir(acqdir_),
-    ds_int(nt_downsample)
+    ds_int(nt_downsample, liam_hack)
 { }
 
 
@@ -83,14 +83,14 @@ void intensity_beam::process_chunk(const shared_ptr<assembled_chunk> &a)
 }
 
 
-shared_ptr<vdif_processor> make_intensity_beam(const string &acqdir)
+shared_ptr<vdif_processor> make_intensity_beam(const string &acqdir, bool liam_hack)
 {
     xmkdir(acqdir);
     
     if (!is_empty_dir(acqdir))
 	throw runtime_error("make_intensity_beam(): fatal: acquisition directory '" + acqdir + "' is nonempty");
 
-    return make_shared<intensity_beam> (acqdir);
+    return make_shared<intensity_beam> (acqdir, liam_hack);
 }
 
 #endif  // HAVE_CH_FRB_IO
