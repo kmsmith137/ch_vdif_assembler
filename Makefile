@@ -33,7 +33,6 @@ endif
 ####################################################################################################
 
 
-INCFILES=ch_vdif_assembler.hpp ch_vdif_assembler_internals.hpp ch_vdif_assembler_kernels.hpp
 BINFILES=run-vdif-assembler
 LIBFILES=libch_vdif_assembler.so
 LIBCYTHON=ch_vdif_assembler_cython.so
@@ -41,11 +40,17 @@ PYMODULES=ch_vdif_assembler.py
 SCRIPTS=show-moose-acquisitions.py index_vdif_waterfalls.py
 TESTBINFILES=test-timestamp-unwrapper test-kernels test-downsampled-intensity time-kernels peek-at-kernels
 
+INCFILES=ch_vdif_assembler.hpp \
+	ch_vdif_assembler_internals.hpp \
+	ch_vdif_assembler_kernels.hpp \
+	ch_vdif_assembler_dspsr.hpp
+
 OFILES=assembler_nerve_center.o \
 	assembler_thread.o \
 	disk_reader_thread.o \
 	disk_writer_thread.o \
 	downsampled_intensity.o \
+	dspsr_handle.o \
 	intensity_beam.o \
 	misc.o \
 	network_thread.o \
