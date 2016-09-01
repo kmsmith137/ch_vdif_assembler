@@ -13,6 +13,10 @@ using namespace ch_vdif_assembler;
 
 static uint8_t rand8()
 {
+    // assign 10% probability of zero
+    if (rand() < 0.1)
+	return 0;
+
     double r = (rand() + 0.5) / (RAND_MAX + 1.0);
     return (uint8_t)(256*r);
 }

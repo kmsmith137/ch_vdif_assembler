@@ -387,30 +387,23 @@ inline void _sum16_liam_hack(int &sum, int &count, const uint8_t *buf)
     __m128i x = _mm_loadu_si128(reinterpret_cast<const __m128i *> (buf));
 
     // "horizonal" sum of 16 elements
-    _m128i y = _mm_and_si128(x, _mm_set1_epi16(255));
-    _m128i z = _mm_and_si128(_mm_srli_si128(x,1), _mm_set1_epi16(255));
+    __m128i y = _mm_and_si128(x, _mm_set1_epi16(255));
+    __m128i z = _mm_and_si128(_mm_srli_si128(x,1), _mm_set1_epi16(255));
 
     y = _mm_add_epi16(y, z);
     y = _mm_add_epi16(y, _mm_srli_si128(y,2));
     y = _mm_add_epi16(y, _mm_srli_si128(y,4));
     y = _mm_add_epi16(y, _mm_srli_si128(y,8));
     sum = _mm_extract_epi16(y, 0);
-    count = 0;
 
-#if 0
-    _m128i m_alt = _mm_set1_epi16(255);
-    x = _mm_
-
-    __m128i mask_invalid = _mm_cmpeq_epi8(x, _mm_set1_epi8(0));
-    
-    // take "horizontal" sum of mask to get the count
-    __m128i s = _mm_andnot_si128(mask_invalid, _mm_set1_epi8(1));
-    s = _mm_add_epi8(s, _mm_srli_si128(s,1));
-    s = _mm_add_epi8(s, _mm_srli_si128(s,2));
-    s = _mm_add_epi8(s, _mm_srli_si128(s,4));
-    s = _mm_add_epi8(s, _mm_srli_si128(s,8));
-    count = _mm_extract_epi8(s, 0);
-#endif
+    // "horizonal" sum of mask
+    y = _mm_cmpeq_epi8(x, _mm_set1_epi8(0));
+    y = _mm_and_si128(y, _mm_set1_epi8(1));   // count zeros
+    y = _mm_add_epi16(y, _mm_srli_si128(y,1));
+    y = _mm_add_epi16(y, _mm_srli_si128(y,2));
+    y = _mm_add_epi16(y, _mm_srli_si128(y,4));
+    y = _mm_add_epi16(y, _mm_srli_si128(y,8));
+    count = 16 - _mm_extract_epi8(y, 0);
 }
 
 
