@@ -13,9 +13,10 @@ namespace ch_vdif_assembler {
 #endif
 
 
-downsampled_intensity::downsampled_intensity(int nt_downsample_) :
+downsampled_intensity::downsampled_intensity(int nt_downsample_, bool liam_hack_) :
     nt_downsample(nt_downsample_), 
     dt_sample(constants::dt_fpga * nt_downsample_),
+    liam_hack(liam_hack_),
     initialized(false),
     nt_alloc(0)
 {
@@ -78,12 +79,22 @@ void downsampled_intensity::process_chunk(const shared_ptr<assembled_chunk> &a)
 		int acc_sum = 0;
 		int acc_count = 0;
 
-		// loop over hires time samples which fall in the given lores sample
-		for (int it2 = it*nt_downsample; it2 < (it+1)*nt_downsample; it2 += 16) {
-		    int sum, count;
-		    assembled_chunk::sum16_auto_correlations(sum, count, p+it2);
-		    acc_sum += sum;
-		    acc_count += count;
+		// Loop over hires time samples which fall in the given lores sample
+		if (!liam_hack) {
+		    for (int it2 = it*nt_downsample; it2 < (it+1)*nt_downsample; it2 += 16) {
+			int sum, count;
+			assembled_chunk::sum16_auto_correlations(sum, count, p+it2);
+			acc_sum += sum;
+			acc_count += count;
+		    }
+		}
+		else {
+		    for (int it2 = it*nt_downsample; it2 < (it+1)*nt_downsample; it2 += 16) {
+			int sum, count;
+			_sum16_liam_hack(sum, count, p+it2);
+			acc_sum += sum;
+			acc_count += count;
+		    }
 		}
 
 		int i = (2*ifreq+ipol)*nt_chunk_lores + it;
@@ -107,6 +118,8 @@ void downsampled_intensity::process_chunk_reference(const std::shared_ptr<assemb
     ssize_t t0_chunk_lores = t0_chunk_hires / nt_downsample;
     ssize_t nt_chunk_lores = nt_chunk_hires / nt_downsample;
 
+    if (liam_hack)
+	throw runtime_error("downsampled_intensity: process_chunk_reference() only makes sense if liam_hack=false");
     if (t0_chunk_hires < 0)
 	throw runtime_error("downsampled_intensity: internal_error: assembled_chunk::t0 was negative?!");
     if (nt_chunk_hires <= 0)

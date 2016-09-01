@@ -479,11 +479,16 @@ struct assembled_chunk : noncopyable {
 // baseband.  Rather than handle the assembled_chunk directly, the vdif_processor can pass it to
 // downsampled_intensity::process_chunk(), and fill a buffer containing all downsampled intensities
 // derived from the assembled_chunk.
+//
+// The "Liam hack" interprets the byte stream as 8-bit real intensities, rather than (4+4)-bit offset-encoded
+// electric field values.  This is a temporary mechanism for capturing the incoherent beam which will
+// eventually be superseded.
 
 
 struct downsampled_intensity {
     const int nt_downsample;  // downsampling factor between baseband and intensity
     const double dt_sample;   // downsampled sample length, int seconds
+    const bool liam_hack;
 
     bool initialized;
     int64_t initial_t0;       // downsampled
@@ -494,7 +499,7 @@ struct downsampled_intensity {
     std::vector<float> intensity_buf;
     std::vector<float> weights_buf;
 
-    downsampled_intensity(int nt_downsample);
+    downsampled_intensity(int nt_downsample, bool liam_hack=false);
 
     //
     // When process_chunk() returns, the following members of 'struct downsampled_intensity' will be initialized
