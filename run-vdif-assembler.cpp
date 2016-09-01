@@ -25,6 +25,7 @@ static void usage()
 	 << "    -S num_seconds                     to run on a simulated network capture (6.4 Gpbs, specified duration)\n"
 	 << "    -u                                 to run a unit-testing stream/processor pair which compares the fast assembler to a reference implementation\n"
 	 << "    -m                                 to run a concurrent \"mischief thread\" which memcpy's between two 0.5 GB buffers (to diagnose memory bandwidth bottlenecks)\n"
+	 << "    -L                                 enables the \"Liam hack\", a temporary mechanism for processing the incoherent beam which will eventually be superseded\n"
 	 << "\n"
 	 << "You may find the script show-moose-acqusitions.py useful for making file lists.  Example usage of this script:\n"
 	 << "\n"
@@ -94,8 +95,10 @@ int main(int argc, char **argv)
     bool is_timing = false;
     bool write_to_disk = false;
     bool mischief_flag = false;
+    bool liam_hack = false;
+    string intensity_acqdir;
+
     shared_ptr<vdif_stream> stream;
-    shared_ptr<vdif_processor> intensity_beam;
     shared_ptr<vdif_processor> waterfall_plotter;
     shared_ptr<vdif_processor> rfi_histogrammer;
     vector<shared_ptr<vdif_processor> > processors;
@@ -106,7 +109,7 @@ int main(int argc, char **argv)
     // Note that when constructing processors, we always set is_critical=true.
     // The assumption is that if we're running this standalone driver program, we
     // just want to crash if a processing thread throws an exception.  In the 
-    // realtime system, we may want to do someting more sophisticated.
+    // realtime system, we may want to do something more sophisticated.
     //
     int pos = 1;
     while (pos < argc) {
@@ -166,6 +169,14 @@ int main(int argc, char **argv)
 	    continue;
 	}
 
+	if (cs == 'L') {
+	    if (liam_hack)
+		usage();
+	    liam_hack = true;
+	    pos++;
+	    continue;
+	}
+
 	// Parse switches with one positional argument
 
 	if ((pos+1 >= argc) || (argv[pos+1][0] == '-'))
@@ -174,10 +185,11 @@ int main(int argc, char **argv)
 	const char *positional_arg = argv[pos+1];
 
 	if (cs == 'i') {
-	    if (intensity_beam)
+	    // We defer constructing the vdif_processor (see below), 
+	    // since we need to know whether the -L flag has been set.
+	    if (intensity_acqdir.size() > 0)
 		usage();
-	    intensity_beam = make_intensity_beam(positional_arg);
-	    processors.push_back(intensity_beam);
+	    intensity_acqdir = positional_arg;
 	    pos += 2;
 	    continue;
 	}
@@ -246,6 +258,15 @@ int main(int argc, char **argv)
 
     if (!stream)
 	usage();
+    if (liam_hack && processors.size())
+	usage();
+
+    // intensity_beam vdif processor is deferred to here, since we need to know whether -L was set
+    if (intensity_acqdir.size() > 0) {
+	auto p = make_intensity_beam(intensity_acqdir, liam_hack);
+	processors.push_back(p);
+    } 
+
     if (!is_timing && !write_to_disk && !processors.size())
 	usage();    // nothing to do
     
