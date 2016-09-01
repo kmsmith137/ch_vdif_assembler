@@ -105,7 +105,7 @@ static void test_sum16_auto_correlations()
 	_sum16_auto_correlations_reference(sum1, count1, &data[0]);
 	
 	int sum2, count2;
-	_sum16_auto_correlations(sum2, count2, &data[0]);
+	_sum16_auto_correlations(sum2, count2, &data2[0]);
 	
 	if ((sum1 == sum2) && (count1 == count2))
 	    continue;
@@ -127,6 +127,40 @@ static void test_sum16_auto_correlations()
 }
 
 
+// -------------------------------------------------------------------------------------------------
+
+
+static void test_sum16_liam_hack()
+{
+    for (int n = 0; n < 1000000; n++) {
+	vector<uint8_t> data = randvec(16);
+	vector<uint8_t> data2 = data;
+	
+	int sum1, count1;
+	_sum16_liam_hack_reference(sum1, count1, &data[0]);
+	
+	int sum2, count2;
+	_sum16_liam_hack(sum2, count2, &data2[0]);
+	
+	if ((sum1 == sum2) && (count1 == count2))
+	    continue;
+
+	cerr << "test_sum16_liam_hack() failed\n";
+	cerr << "    data = [";
+
+	for (int i = 0; i < 16; i++)
+	    cerr << " " << hex << (unsigned int)(data[i]) << dec;
+
+	cerr << " ]\n"
+	     << "    sum1=" << sum1 << " count1=" << count1 << "\n"
+	     << "    sum2=" << sum2 << " count2=" << count2 << "\n";
+
+	exit(1);
+    }
+
+    cerr << "test_sum16_liam_hack: pass\n";
+}
+
 
 // -------------------------------------------------------------------------------------------------
 
@@ -134,6 +168,7 @@ static void test_sum16_auto_correlations()
 int main(int argc, char **argv)
 {
     test_sum16_auto_correlations();
+    test_sum16_liam_hack();
     test_assemble128();
 
     return 0;
