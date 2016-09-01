@@ -5,7 +5,7 @@ using namespace std;
 using namespace ch_vdif_assembler;
 
 
-static void usage()
+static void usage(const char *msg = NULL)
 {
     cerr << "Usage: run-vdif-assembler [FLAGS]\n"
 	 << "\n"
@@ -38,6 +38,9 @@ static void usage()
 	 << "    index-vdif-waterfalls.py waterfall_41537\n"
 	 << "\n"
 	 << "The index-vdif-waterfalls.py script makes an HTML summary page with clickable thumbnails\n";
+
+    if (msg != NULL)
+	cerr << "\nFatal: " << msg << "\n";
 
     exit(2);
 }
@@ -122,7 +125,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'n') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    stream = make_network_stream();
 	    pos++;
 	    continue;
@@ -136,7 +139,7 @@ int main(int argc, char **argv)
 
 	if (cs == 's') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    stream = make_simulated_stream();
 	    pos++;
 	    continue;
@@ -144,7 +147,7 @@ int main(int argc, char **argv)
 
 	if (cs == 't') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    stream = make_timing_stream(timing_npackets_per_chunk, timing_nchunks);
 	    is_timing = true;
 	    pos++;
@@ -153,7 +156,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'u') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    shared_ptr<unit_test_buffer> ubuf = make_shared<unit_test_buffer>();
 	    stream = make_unit_test_stream(ubuf, 100);
 	    processors.push_back(make_unit_test_processor(ubuf));
@@ -162,16 +165,12 @@ int main(int argc, char **argv)
 	}
 
 	if (cs == 'm') {
-	    if (mischief_flag)
-		usage();
 	    mischief_flag = true;
 	    pos++;
 	    continue;
 	}
 
 	if (cs == 'L') {
-	    if (liam_hack)
-		usage();
 	    liam_hack = true;
 	    pos++;
 	    continue;
@@ -188,7 +187,7 @@ int main(int argc, char **argv)
 	    // We defer constructing the vdif_processor (see below), 
 	    // since we need to know whether the -L flag has been set.
 	    if (intensity_acqdir.size() > 0)
-		usage();
+		usage("multiple -i flags specified");
 	    intensity_acqdir = positional_arg;
 	    pos += 2;
 	    continue;
@@ -196,7 +195,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'f') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    stream = make_file_stream(positional_arg);
 	    pos += 2;
 	    continue;
@@ -204,7 +203,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'S') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    double nsec = atof(positional_arg);
 	    cout << "simulated stream duration: " << nsec << " seconds\n";
 	    xassert(nsec > 0.0);
@@ -215,7 +214,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'T') {
 	    if (stream)
-		usage();
+		usage("multiple input_streams were specified");
 	    timing_nchunks = atoi(positional_arg);
 	    cout << "timing chunk count: " << timing_nchunks << " seconds\n";
 	    xassert(timing_nchunks > 0);
@@ -227,7 +226,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'w') {
 	    if (waterfall_plotter)
-		usage();
+		usage("multipler waterfall_plotters were specified");
 	    waterfall_plotter = make_waterfall_plotter(positional_arg, true);
 	    processors.push_back(waterfall_plotter);
 	    pos += 2;
@@ -236,7 +235,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'r') {
 	    if (rfi_histogrammer)
-		usage();
+		usage("multiple rfi_histogrammers were specified");
 	    rfi_histogrammer = make_rfi_histogrammer(positional_arg, true, false);
 	    processors.push_back(rfi_histogrammer);
 	    pos += 2;
@@ -245,7 +244,7 @@ int main(int argc, char **argv)
 
 	if (cs == 'R') {
 	    if (rfi_histogrammer)
-		usage();
+		usage("multiple rfi_histogrammers were specified");
 	    rfi_histogrammer = make_rfi_histogrammer(positional_arg, true, true);
 	    processors.push_back(rfi_histogrammer);
 	    pos += 2;
@@ -257,9 +256,9 @@ int main(int argc, char **argv)
     }
 
     if (!stream)
-	usage();
+	usage("no streams were specified");
     if (liam_hack && processors.size())
-	usage();
+	usage("the only processor which can be used with -L is the intensity acquisition");
 
     // intensity_beam vdif processor is deferred to here, since we need to know whether -L was set
     if (intensity_acqdir.size() > 0) {
@@ -268,7 +267,7 @@ int main(int argc, char **argv)
     } 
 
     if (!is_timing && !write_to_disk && !processors.size())
-	usage();    // nothing to do
+	usage("no processors specified, nothing to do");
     
     vdif_assembler assembler(write_to_disk);
 
