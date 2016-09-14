@@ -184,7 +184,7 @@ class processor:
 class moose_inventory:
     def __init__(self):
         suffixes = [ '_chime_beamformed', '_vdif_assembler' ]
-        self.topdirs = [ ('/drives/G/%d' % i) for i in xrange(10) ]
+        self.topdirs = [ ('/drives/B/%d' % i) for i in xrange(10) ] + [ ('/drives/H/%d' % i) for i in xrange(10) ]
         self.subdirs = set()
 
         for t in self.topdirs:
