@@ -48,10 +48,10 @@ class constants:
     num_disks = ch_vdif_assembler_cython.num_disks                          # 10 (moose)
 
 
-class assembler:
+class assembler(object):
     def __init__(self, write_to_disk=False, rbuf_size=constants.num_disks, abuf_size=4, assembler_nt=65536):
         self._assembler = ch_vdif_assembler_cython.assembler(write_to_disk, rbuf_size, abuf_size, assembler_nt)
-        self.python_processor = None
+        self.python_processors = []
 
 
     def register_processor(self, p):
@@ -59,31 +59,42 @@ class assembler:
             self._assembler.register_cpp_processor(p)   # register C++ processor (this actually spawns a processing thread)
         elif not isinstance(p, processor):
             raise RuntimeError('Argument to assembler.register_processor() must be either an object of class ch_vdif_assembler.processor, or a C++ processor (e.g. returned by make_waterfall_plotter)')
-        elif self.python_processor is not None:
-            raise RuntimeError('Currently, ch_vdif_assembler only allows registering one python processor (but an arbitrary number of C++ processors)')
-        else:
-            self.python_processor = p 
+        self.python_processors.append(p)
 
 
     def run(self, stream):
-        if self.python_processor is None:
+        if not self.python_processors:
             self._assembler.start_async(stream)
             self._assembler.wait_until_end()
             return
 
         self._assembler.register_python_processor()
 
+        processors_byte_data = [p.byte_data for p in self.python_processors]
+        need_byte_data = True in processors_byte_data
+        need_complex_data = False in processors_byte_data
+
         try:
             self._assembler.start_async(stream)
-        
+
             while True:
                 chunk = self._assembler.get_next_python_chunk()
                 if chunk is None:
                     break
-                (t0, nt, efield, mask) = chunk.get_data()
-                self.python_processor.process_chunk(t0, nt, efield, mask)
+                if need_byte_data:
+                    byte_data = chunk.get_byte_data()
+                if need_complex_data:
+                    complex_data = chunk.get_data()
+                for p in self.python_processors:
+                    if p.byte_data:
+                        t0, nt, efield = byte_data
+                        mask = None
+                    else:
+                        t0, nt, efield, mask = complex_data
+                    p.process_chunk(t0, nt, efield, mask)
 
-            self.python_processor.finalize()
+            for p in self.python_processors:
+                p.finalize()
 
         finally:
             self._assembler.unregister_python_processor()
@@ -142,7 +153,7 @@ def cpp_waterfall_plotter(outdir, is_critical=False):
     return ch_vdif_assembler_cython.cpp_waterfall_plotter(outdir, is_critical)
 
 
-class processor:
+class processor(object):
     """
     To define a python processor, you subclass this base class.
 
@@ -158,17 +169,25 @@ class processor:
     interruption in data stream, then a timestamp gap will appear.
 
     The 'efield' arg is a shape (nfreq,2,nt) complex array with electric field values, where
-    the middle index is polarziation.  Missing data is represented by (0+0j).  The 'mask' arg
+    the middle index is polarization.  Missing data is represented by (0+0j).  The 'mask' arg
     is a shape (nfreq,2,nt) integer array which is 0 for missing data, and 1 for non-missing.
 
-     WARNING 2: Handling missing data is an important aspect of the vdif_processor since it 
-     happens all the time.  If a GPU correlator node is down, which is a frequent occurrence, 
-     then some frequencies will be "all missing".  There are also routine packet loss events 
-     on second-timescales which result in some high-speed samples being flagged as missing data.
-     """
+    For subclasses with attribute `byte_data = True`, 'efield' is a shape
+    (nfreq,2,nt) byte array, as in the C++ versions. 'mask' is None.
+
+    WARNING 2: Handling missing data is an important aspect of the vdif_processor since it 
+    happens all the time.  If a GPU correlator node is down, which is a frequent occurrence, 
+    then some frequencies will be "all missing".  There are also routine packet loss events 
+    on second-timescales which result in some high-speed samples being flagged as missing data.
+    """
+
+    byte_data = False
 
     def process_chunk(self, t0, nt, efield, mask):
-        print 'process_chunk called! t0=%s nt=%s efield (%s,%s) mask (%s,%s)' % (t0, nt, efield.dtype, efield.shape, mask.dtype, mask.shape)
+        if mask is None:
+            print 'process_chunk called! t0=%s nt=%s efield (%s,%s)' % (t0, nt, efield.dtype, efield.shape)
+        else:
+            print 'process_chunk called! t0=%s nt=%s efield (%s,%s) mask (%s,%s)' % (t0, nt, efield.dtype, efield.shape, mask.dtype, mask.shape)
 
     def finalize(self):
         pass
@@ -181,7 +200,7 @@ class processor:
 # See also the script show-moose-acquisitions.py
 
 
-class moose_inventory:
+class moose_inventory(object):
     def __init__(self):
         suffixes = [ '_chime_beamformed', '_vdif_assembler' ]
         self.topdirs = [ ('/drives/G/%d' % i) for i in xrange(10) ]

@@ -89,6 +89,16 @@ struct cython_assembled_chunk {
 	std::complex<float> *efield = reinterpret_cast<std::complex<float> *> (efield_hack);
 	p->fill_efield_array_reference(efield, mask);
     }
+
+	inline uint8_t* get_buf(void)
+	{
+		// This const_cast is super sketchy but I can't figure out a way to get around it since I want
+		// to use this buffer as a numpy array (in the python assembled_chunk.get_byte_data). That array
+		// is set as read only. It would be marginally better if the const_cast could be done later in cython, 
+		// but I can't figure out how to do that. -KM
+		return const_cast<uint8_t*> (p->buf);
+	}
+
 };
 
 
